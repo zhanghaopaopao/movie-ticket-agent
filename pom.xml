@@ -16,21 +16,17 @@
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>movie-ticket-agent</name>
-    <description>Movie ticket agent deterministic Java backend</description>
+    <description>Movie ticket agent backend skeleton</description>
 
     <modules>
-        <module>movie-ticket-common</module>
-        <module>movie-ticket-auth</module>
-        <module>movie-ticket-ticketing</module>
-        <module>movie-ticket-booking</module>
-        <module>movie-ticket-admin</module>
-        <module>movie-ticket-app</module>
+        <module>common</module>
+        <module>pojo</module>
+        <module>server</module>
     </modules>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
-        <springdoc.version>2.8.15</springdoc.version>
     </properties>
 
     <dependencyManagement>
@@ -39,11 +35,6 @@
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springdoc</groupId>
-                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-                <version>${springdoc.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
