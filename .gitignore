@@ -6,4 +6,9 @@ target/
 *.log
 .env
 application-secret.yml
+application-dev.yml
 .m2repo/
+.DS_Store
+*.swp
+*.swo
+.idea/workspace.xml

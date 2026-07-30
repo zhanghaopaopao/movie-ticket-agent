@@ -1,10 +1,33 @@
 spring:
   application:
     name: movie-ticket-agent-server
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+  profiles:
+    active: dev
 
 server:
   port: 8080
+
+cos:
+  client:
+    accessKey: xxx
+    secretKey: xxx
+    region: xxx
+    bucket: xxx
+  # todo 需替换配置，然后取消注释
+  # Elasticsearch 配置
+  # todo 需替换配置，然后取消注释
+  #  elasticsearch:
+  #    uris: http://localhost:9200
+  #    username: root
+  #    password: 123456
+  # 文件上传
+  servlet:
+    multipart:
+      # 大小限制
+      max-file-size: 10MB
+
+knife4j:
+  enable: true
+  openapi:
+    title: "接口文档"
+    version: 1.0
