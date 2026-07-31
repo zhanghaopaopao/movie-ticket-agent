@@ -44,6 +44,17 @@ public enum ErrorCode {
     CINEMA_NAME_DUPLICATE(3001, "影院名称已存在"),
     CINEMA_HAS_ACTIVE_SHOWTIMES(3002, "该影院存在在售场次，不可停用"),
 
+    // ---- 影厅（4000-4999）----
+
+    HALL_NOT_FOUND(4000, "影厅不存在"),
+    HALL_NAME_DUPLICATE(4001, "该影院下已存在同名影厅"),
+
+    // ---- 场次（5000-5999）----
+
+    SHOWTIME_NOT_FOUND(5000, "场次不存在"),
+    SHOWTIME_TIME_CONFLICT(5001, "该时间段与已有场次冲突"),
+    SHOWTIME_HAS_LOCKED_SEATS(5002, "该场次已有锁座或订单，不可修改时间"),
+
     // ---- 文件（6000-6999）----
 
     FILE_UPLOAD_ERROR(6000, "文件上传失败"),
