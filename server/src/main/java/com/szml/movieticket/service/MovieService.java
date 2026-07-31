@@ -1,0 +1,43 @@
+package com.szml.movieticket.service;
+
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.szml.movieticket.dto.MovieCreateDTO;
+import com.szml.movieticket.dto.MovieStatusDTO;
+import com.szml.movieticket.dto.MovieUpdateDTO;
+import com.szml.movieticket.entity.Movie;
+import com.szml.movieticket.vo.MoviePageVO;
+import com.szml.movieticket.vo.MovieVO;
+
+/**
+ * 影片服务接口。
+ *
+ * @author zhanghao
+ * @since 2026-07-31
+ */
+public interface MovieService extends IService<Movie> {
+
+    /**
+     * 分页查询影片列表。
+     */
+    MoviePageVO pageMovies(int page, int size, String keyword, String status);
+
+    /**
+     * 查询影片详情。
+     */
+    MovieVO getMovieDetail(Long id);
+
+    /**
+     * 新增影片。
+     */
+    MovieVO createMovie(MovieCreateDTO dto);
+
+    /**
+     * 编辑影片。
+     */
+    MovieVO updateMovie(Long id, MovieUpdateDTO dto);
+
+    /**
+     * 上下架影片。
+     */
+    MovieVO updateMovieStatus(Long id, MovieStatusDTO dto);
+}
