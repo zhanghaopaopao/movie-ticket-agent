@@ -12,19 +12,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
- * JWT 工具类：Access Token（30min）+ Refresh Token（7d）。
+ * JWT 工具类，单令牌模式。
  *
  * @author zhanghao
  * @since 2026-07-30
  */
 @Component
-public class JwtUtil {
+public class
+JwtUtil {
 
     private static final String ISSUER = "movie-ticket-agent";
-    private static final String TYPE_ACCESS = "ACCESS";
-    private static final String TYPE_REFRESH = "REFRESH";
-    private static final long ACCESS_EXPIRATION_MS = 30 * 60 * 1000L;
-    private static final long REFRESH_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000L;
+    private static final long EXPIRATION_MS = 30 * 60 * 1000L;
 
     private final SecretKey secretKey;
 
@@ -32,31 +30,24 @@ public class JwtUtil {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateAccessToken(Long userId, UserRole role) {
+    /**
+     * 签发 JWT，有效期 30 分钟。
+     */
+    public String generateToken(Long userId, UserRole role) {
         Date now = new Date();
         return Jwts.builder()
                 .issuer(ISSUER)
                 .subject(String.valueOf(userId))
                 .claim("role", role.getCode())
-                .claim("type", TYPE_ACCESS)
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + ACCESS_EXPIRATION_MS))
+                .expiration(new Date(now.getTime() + EXPIRATION_MS))
                 .signWith(secretKey)
                 .compact();
     }
 
-    public String generateRefreshToken(Long userId) {
-        Date now = new Date();
-        return Jwts.builder()
-                .issuer(ISSUER)
-                .subject(String.valueOf(userId))
-                .claim("type", TYPE_REFRESH)
-                .issuedAt(now)
-                .expiration(new Date(now.getTime() + REFRESH_EXPIRATION_MS))
-                .signWith(secretKey)
-                .compact();
-    }
-
+    /**
+     * 解析并校验 Token。
+     */
     public Claims parseToken(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
@@ -65,14 +56,16 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    public boolean isAccessToken(Claims claims) {
-        return TYPE_ACCESS.equals(claims.get("type"));
-    }
-
+    /**
+     * 从 Claims 中提取用户 ID。
+     */
     public Long getUserId(Claims claims) {
         return Long.parseLong(claims.getSubject());
     }
 
+    /**
+     * 从 Claims 中提取角色。
+     */
     public UserRole getRole(Claims claims) {
         return UserRole.fromCode(claims.get("role", Integer.class));
     }

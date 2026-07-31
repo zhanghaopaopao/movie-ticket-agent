@@ -13,9 +13,8 @@ import java.util.Map;
 @Data
 public class LoginVO {
 
-    private String accessToken;
-
-    private String refreshToken;
+    /** JWT 令牌 */
+    private String token;
 
     /** 有效期（秒） */
     private Integer expiresIn;

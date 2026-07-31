@@ -29,7 +29,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements AuthService {
 
-    private static final int ACCESS_TOKEN_EXPIRES_IN = 1800;
+    private static final int TOKEN_EXPIRES_IN = 1800;
 
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
@@ -56,8 +56,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             throw new AuthException(ErrorCode.AUTH_WRONG_PASSWORD);
         }
 
-        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getRole());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getId());
+        String token = jwtUtil.generateToken(user.getId(), user.getRole());
 
         Map<String, Object> userInfo = new LinkedHashMap<>();
         userInfo.put("id", user.getId());
@@ -66,9 +65,8 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         userInfo.put("role", user.getRole().getCode());
 
         LoginVO loginVO = new LoginVO();
-        loginVO.setAccessToken(accessToken);
-        loginVO.setRefreshToken(refreshToken);
-        loginVO.setExpiresIn(ACCESS_TOKEN_EXPIRES_IN);
+        loginVO.setToken(token);
+        loginVO.setExpiresIn(TOKEN_EXPIRES_IN);
         loginVO.setUser(userInfo);
 
         log.info("用户登录成功, userId: {}, role: {}", user.getId(), user.getRole());
