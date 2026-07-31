@@ -1,0 +1,23 @@
+package com.szml.movieticket.vo;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 影院分页响应 VO。
+ *
+ * @author zhanghao
+ * @since 2026-07-31
+ */
+@Data
+public class CinemaPageVO {
+
+    private long total;
+
+    private int page;
+
+    private int size;
+
+    private List<CinemaVO> records;
+}

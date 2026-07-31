@@ -38,6 +38,12 @@ public enum ErrorCode {
     MOVIE_NAME_DUPLICATE(2001, "影片名称已存在"),
     MOVIE_HAS_ACTIVE_SHOWTIMES(2002, "该影片存在在售场次，不可下架"),
 
+    // ---- 影院（3000-3999）----
+
+    CINEMA_NOT_FOUND(3000, "影院不存在"),
+    CINEMA_NAME_DUPLICATE(3001, "影院名称已存在"),
+    CINEMA_HAS_ACTIVE_SHOWTIMES(3002, "该影院存在在售场次，不可停用"),
+
     // ---- 文件（6000-6999）----
 
     FILE_UPLOAD_ERROR(6000, "文件上传失败"),
