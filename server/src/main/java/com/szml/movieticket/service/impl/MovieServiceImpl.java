@@ -6,21 +6,31 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.szml.movieticket.dto.MovieCreateDTO;
 import com.szml.movieticket.dto.MovieStatusDTO;
 import com.szml.movieticket.dto.MovieUpdateDTO;
+import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Movie;
+import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.MovieStatus;
+import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.MovieException;
+import com.szml.movieticket.mapper.CinemaMapper;
+import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.MovieMapper;
+import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.service.MovieService;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -31,7 +41,12 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements MovieService {
+
+    private final ShowtimeMapper showtimeMapper;
+    private final CinemaMapper cinemaMapper;
+    private final HallMapper hallMapper;
 
     @Override
     public MoviePageVO pageMovies(int page, int size, String keyword, String status) {
@@ -111,8 +126,13 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         }
 
         if (dto.getStatus() == MovieStatus.OFFLINE && movie.getStatus() == MovieStatus.NOW_SHOWING) {
-            // TODO: 接入 showtime 表后查询 count WHERE movie_id = id AND status = ON_SALE
-            log.warn("影片下架操作，暂未校验在售场次, movieId: {}", id);
+            long activeCount = showtimeMapper.selectCount(
+                    new LambdaQueryWrapper<Showtime>()
+                            .eq(Showtime::getMovieId, id)
+                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+            if (activeCount > 0) {
+                throw new MovieException(ErrorCode.MOVIE_HAS_ACTIVE_SHOWTIMES);
+            }
         }
 
         movie.setStatus(dto.getStatus());
@@ -120,6 +140,80 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
 
         log.info("影片状态变更, id: {}, newStatus: {}", id, dto.getStatus());
         return toVO(movie);
+    }
+
+    @Override
+    public MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword) {
+        LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(status)) {
+            wrapper.eq(Movie::getStatus, MovieStatus.valueOf(status));
+        }
+        if (StringUtils.hasText(genre)) {
+            wrapper.like(Movie::getGenre, genre);
+        }
+        if (StringUtils.hasText(keyword)) {
+            wrapper.like(Movie::getName, keyword);
+        }
+        wrapper.orderByDesc(Movie::getCreateTime);
+
+        Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
+        LocalDate today = LocalDate.now();
+
+        List<MovieVO> records = pageResult.getRecords().stream().map(movie -> {
+            MovieVO vo = toVO(movie);
+            // 当日在售排片统计
+            List<Showtime> todayShortimes = showtimeMapper.selectList(
+                    new LambdaQueryWrapper<Showtime>()
+                            .eq(Showtime::getMovieId, movie.getId())
+                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                            .ge(Showtime::getStartAt, today.atStartOfDay())
+                            .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
+            vo.setShowtimeCount(todayShortimes.size());
+
+            // 覆盖影院数
+            Set<Long> cinemaIds = new HashSet<>();
+            for (Showtime st : todayShortimes) {
+                Hall hall = hallMapper.selectById(st.getHallId());
+                if (hall != null) {
+                    cinemaIds.add(hall.getCinemaId());
+                }
+            }
+            vo.setCinemaCount(cinemaIds.size());
+            return vo;
+        }).collect(Collectors.toList());
+
+        MoviePageVO pageVO = new MoviePageVO();
+        pageVO.setTotal(pageResult.getTotal());
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(records);
+        return pageVO;
+    }
+
+    @Override
+    public MovieVO getMovieDetailForUser(Long id) {
+        Movie movie = getById(id);
+        if (movie == null) {
+            throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
+        }
+        MovieVO vo = toVO(movie);
+
+        // todayShowtimeCoverage
+        LocalDate today = LocalDate.now();
+        List<Showtime> todayShortimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .eq(Showtime::getMovieId, id)
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                        .ge(Showtime::getStartAt, today.atStartOfDay())
+                        .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
+        vo.setShowtimeCount(todayShortimes.size());
+        Set<Long> cinemaIds = new HashSet<>();
+        for (Showtime st : todayShortimes) {
+            Hall hall = hallMapper.selectById(st.getHallId());
+            if (hall != null) cinemaIds.add(hall.getCinemaId());
+        }
+        vo.setCinemaCount(cinemaIds.size());
+        return vo;
     }
 
     private LambdaQueryWrapper<Movie> buildQueryWrapper(String keyword, String status) {

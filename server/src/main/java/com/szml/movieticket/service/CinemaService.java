@@ -40,4 +40,14 @@ public interface CinemaService extends IService<Cinema> {
      * 启停影院。
      */
     CinemaVO updateCinemaStatus(Long id, CinemaStatusDTO dto);
+
+    /**
+     * C端分页查询影院列表（含 minPrice、hallTypes）。
+     */
+    CinemaPageVO listCinemasForUser(int page, int size, String district, String brand, String hallType, String keyword);
+
+    /**
+     * C端附近影院查询（Haversine 公式按距离排序）。
+     */
+    CinemaPageVO listNearbyCinemas(int page, int size, double lat, double lng, int radius);
 }

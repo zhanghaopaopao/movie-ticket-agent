@@ -28,12 +28,12 @@ public class FileController {
     /**
      * 上传图片文件（海报等）。
      *
-     * @param file MultipartFile，支持 jpg/png/webp，最大 5MB
+     * @param file 上传的图片文件，支持 jpg/png/webp，最大 5MB
      * @return 文件访问 URL
      */
     @PostMapping("/upload")
     public Result<UploadResultDTO> upload(@RequestParam("file") MultipartFile file) {
-        log.info("收到文件上传请求, fileName: {}, size: {}", file.getOriginalFilename(), file.getSize());
+        log.info("上传图片文件, 文件名: {}, 文件大小: {}字节", file.getOriginalFilename(), file.getSize());
         UploadResultDTO uploadResultDTO = fileService.uploadImage(file);
         return Result.success(uploadResultDTO);
     }

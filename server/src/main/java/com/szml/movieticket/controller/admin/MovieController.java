@@ -34,6 +34,7 @@ public class MovieController {
                                      @RequestParam(defaultValue = "20") int size,
                                      @RequestParam(required = false) String keyword,
                                      @RequestParam(required = false) String status) {
+        log.info("B端查询影片列表, 页码: {}, 每页条数: {}, 搜索关键词: {}, 上映状态: {}", page, size, keyword, status);
         MoviePageVO moviePageVO = movieService.pageMovies(page, size, keyword, status);
         return Result.success(moviePageVO);
     }
@@ -43,7 +44,7 @@ public class MovieController {
      */
     @GetMapping("/{id}")
     public Result<MovieVO> detail(@PathVariable Long id) {
-        log.info("查询影片详情, id: {}", id);
+        log.info("查询影片详情, 影片ID: {}", id);
         MovieVO movieVO = movieService.getMovieDetail(id);
         return Result.success(movieVO);
     }
@@ -53,7 +54,7 @@ public class MovieController {
      */
     @PostMapping
     public Result<MovieVO> create(@Valid @RequestBody MovieCreateDTO dto) {
-        log.info("新增影片, name: {}", dto.getName());
+        log.info("新增影片, 影片名称: {}", dto.getName());
         MovieVO movieVO = movieService.createMovie(dto);
         return Result.success(movieVO);
     }
@@ -63,7 +64,7 @@ public class MovieController {
      */
     @PutMapping("/{id}")
     public Result<MovieVO> update(@PathVariable Long id, @RequestBody MovieUpdateDTO dto) {
-        log.info("编辑影片, id: {}", id);
+        log.info("编辑影片, 影片ID: {}", id);
         MovieVO movieVO = movieService.updateMovie(id, dto);
         return Result.success(movieVO);
     }
@@ -73,7 +74,7 @@ public class MovieController {
      */
     @PutMapping("/{id}/status")
     public Result<MovieVO> updateStatus(@PathVariable Long id, @Valid @RequestBody MovieStatusDTO dto) {
-        log.info("变更影片状态, id: {}, targetStatus: {}", id, dto.getStatus());
+        log.info("变更影片状态, 影片ID: {}, 目标状态: {}", id, dto.getStatus());
         MovieVO movieVO = movieService.updateMovieStatus(id, dto);
         return Result.success(movieVO);
     }

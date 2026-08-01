@@ -35,6 +35,8 @@ public class CinemaController {
                                       @RequestParam(required = false) String keyword,
                                       @RequestParam(required = false) String district,
                                       @RequestParam(required = false) Integer status) {
+        log.info("B端查询影院列表, 页码: {}, 每页条数: {}, 搜索关键词: {}, 所属商圈: {}, 启用状态: {}",
+                page, size, keyword, district, status);
         CinemaPageVO cinemaPageVO = cinemaService.pageCinemas(page, size, keyword, district, status);
         return Result.success(cinemaPageVO);
     }
@@ -44,7 +46,7 @@ public class CinemaController {
      */
     @GetMapping("/{id}")
     public Result<CinemaVO> detail(@PathVariable Long id) {
-        log.info("查询影院详情, id: {}", id);
+        log.info("查询影院详情, 影院ID: {}", id);
         CinemaVO cinemaVO = cinemaService.getCinemaDetail(id);
         return Result.success(cinemaVO);
     }
@@ -54,7 +56,7 @@ public class CinemaController {
      */
     @PostMapping
     public Result<CinemaVO> create(@Valid @RequestBody CinemaCreateDTO dto) {
-        log.info("新增影院, name: {}", dto.getName());
+        log.info("新增影院, 影院名称: {}", dto.getName());
         CinemaVO cinemaVO = cinemaService.createCinema(dto);
         return Result.success(cinemaVO);
     }
@@ -64,7 +66,7 @@ public class CinemaController {
      */
     @PutMapping("/{id}")
     public Result<CinemaVO> update(@PathVariable Long id, @RequestBody CinemaUpdateDTO dto) {
-        log.info("编辑影院, id: {}", id);
+        log.info("编辑影院, 影院ID: {}", id);
         CinemaVO cinemaVO = cinemaService.updateCinema(id, dto);
         return Result.success(cinemaVO);
     }
@@ -74,7 +76,7 @@ public class CinemaController {
      */
     @PutMapping("/{id}/status")
     public Result<CinemaVO> updateStatus(@PathVariable Long id, @Valid @RequestBody CinemaStatusDTO dto) {
-        log.info("变更影院状态, id: {}, targetStatus: {}", id, dto.getStatus());
+        log.info("变更影院状态, 影院ID: {}, 目标状态: {}", id, dto.getStatus());
         CinemaVO cinemaVO = cinemaService.updateCinemaStatus(id, dto);
         return Result.success(cinemaVO);
     }

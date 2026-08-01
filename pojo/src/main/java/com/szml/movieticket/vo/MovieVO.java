@@ -40,5 +40,8 @@ public class MovieVO {
     /** 当前在售场次数 */
     private Integer showtimeCount;
 
+    /** 当日覆盖影院数 */
+    private Integer cinemaCount;
+
     private LocalDateTime createTime;
 }
