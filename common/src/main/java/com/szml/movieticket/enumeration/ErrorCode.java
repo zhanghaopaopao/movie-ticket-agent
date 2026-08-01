@@ -11,7 +11,7 @@ import lombok.Getter;
 @Getter
 public enum ErrorCode {
 
-    SUCCESS(0, "成功"),
+    SUCCESS(1, "成功"),
 
     /** 参数校验失败 */
     PARAM_ERROR(400, "参数校验失败"),

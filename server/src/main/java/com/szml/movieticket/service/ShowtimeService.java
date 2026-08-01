@@ -5,8 +5,11 @@ import com.szml.movieticket.dto.ShowtimeCreateDTO;
 import com.szml.movieticket.dto.ShowtimeStatusDTO;
 import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.entity.Showtime;
+import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
 import com.szml.movieticket.vo.ShowtimePageVO;
 import com.szml.movieticket.vo.ShowtimeVO;
+
+import java.util.Map;
 
 /**
  * 场次服务接口。
@@ -35,4 +38,13 @@ public interface ShowtimeService extends IService<Showtime> {
      * 停售/取消场次。
      */
     ShowtimeVO updateShowtimeStatus(Long id, ShowtimeStatusDTO dto);
+
+    /**
+     * 批量设置场次座位状态。
+     *
+     * @param showtimeId 场次ID
+     * @param dto        座位ID列表 + 目标状态
+     * @return { updatedSeatIds: [...], skippedSeatIds: [...], skippedReason: "..." }
+     */
+    Map<String, Object> updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto);
 }

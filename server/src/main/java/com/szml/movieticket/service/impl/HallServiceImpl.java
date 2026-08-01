@@ -15,6 +15,7 @@ import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.service.HallService;
 import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -30,15 +31,11 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements HallService {
 
     private final CinemaMapper cinemaMapper;
     private final SeatMapper seatMapper;
-
-    public HallServiceImpl(CinemaMapper cinemaMapper, SeatMapper seatMapper) {
-        this.cinemaMapper = cinemaMapper;
-        this.seatMapper = seatMapper;
-    }
 
     @Override
     public List<HallVO> listHallsByCinemaId(Long cinemaId) {

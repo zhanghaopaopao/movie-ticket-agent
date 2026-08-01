@@ -11,6 +11,7 @@ import com.szml.movieticket.service.OrderService;
 import com.szml.movieticket.vo.OrderDetailVO;
 import com.szml.movieticket.vo.OrderPageVO;
 import com.szml.movieticket.vo.OrderVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> implements OrderService {
 
     private final UserMapper userMapper;
@@ -43,23 +45,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
     private final ShowtimeSeatMapper showtimeSeatMapper;
     private final SeatMapper seatMapper;
 
-    public OrderServiceImpl(UserMapper userMapper, OrderItemMapper orderItemMapper,
-                            PaymentMapper paymentMapper, com.szml.movieticket.mapper.TicketMapper ticketMapper,
-                            SeatLockLogMapper seatLockLogMapper, ShowtimeMapper showtimeMapper,
-                            MovieMapper movieMapper, HallMapper hallMapper, CinemaMapper cinemaMapper,
-                            ShowtimeSeatMapper showtimeSeatMapper, SeatMapper seatMapper) {
-        this.userMapper = userMapper;
-        this.orderItemMapper = orderItemMapper;
-        this.paymentMapper = paymentMapper;
-        this.ticketMapper = ticketMapper;
-        this.seatLockLogMapper = seatLockLogMapper;
-        this.showtimeMapper = showtimeMapper;
-        this.movieMapper = movieMapper;
-        this.hallMapper = hallMapper;
-        this.cinemaMapper = cinemaMapper;
-        this.showtimeSeatMapper = showtimeSeatMapper;
-        this.seatMapper = seatMapper;
-    }
 
     @Override
     public OrderPageVO pageOrders(int pageNum, int size, String orderNo, String email,
