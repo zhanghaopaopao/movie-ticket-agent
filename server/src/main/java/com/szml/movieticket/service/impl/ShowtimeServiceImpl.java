@@ -22,6 +22,7 @@ import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +32,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -181,7 +180,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     }
 
     @Override
-    public Map<String, Object> updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto) {
+    public ShowtimeSeatStatusVO updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto) {
         List<Long> updatedSeatIds = new ArrayList<>();
         List<Long> skippedSeatIds = new ArrayList<>();
 
@@ -192,20 +191,18 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         for (ShowtimeSeat seat : seats) {
             if ("UNAVAILABLE".equals(dto.getStatus())) {
-                // 已售(2)或已锁(1)的不可修改
                 if (seat.getStatus() == 2 || seat.getStatus() == 1) {
                     skippedSeatIds.add(seat.getId());
                     continue;
                 }
-                seat.setStatus(3); // UNAVAILABLE
+                seat.setStatus(3);
                 updatedSeatIds.add(seat.getId());
             } else if ("AVAILABLE".equals(dto.getStatus())) {
-                // 仅 UNAVAILABLE(3) 的可恢复
                 if (seat.getStatus() != 3) {
                     skippedSeatIds.add(seat.getId());
                     continue;
                 }
-                seat.setStatus(0); // AVAILABLE
+                seat.setStatus(0);
                 updatedSeatIds.add(seat.getId());
             }
         }
@@ -219,11 +216,11 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         log.info("座位状态批量更新, showtimeId: {}, targetStatus: {}, updated: {}, skipped: {}",
                 showtimeId, dto.getStatus(), updatedSeatIds.size(), skippedSeatIds.size());
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("updatedSeatIds", updatedSeatIds);
-        result.put("skippedSeatIds", skippedSeatIds);
+        ShowtimeSeatStatusVO result = new ShowtimeSeatStatusVO();
+        result.setUpdatedSeatIds(updatedSeatIds);
+        result.setSkippedSeatIds(skippedSeatIds);
         if (!skippedSeatIds.isEmpty()) {
-            result.put("skippedReason", "座位已被售出或锁定，不可修改状态");
+            result.setSkippedReason("座位已被售出或锁定，不可修改状态");
         }
         return result;
     }

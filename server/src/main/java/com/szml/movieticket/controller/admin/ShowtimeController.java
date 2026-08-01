@@ -7,13 +7,12 @@ import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /**
  * 场次管理 Controller（B 端）。
@@ -67,11 +66,11 @@ public class ShowtimeController {
      * 批量设置场次座位状态。
      */
     @PutMapping("/{id}/seats/status")
-    public Result<Map<String, Object>> updateSeatStatus(@PathVariable Long id,
-                                                         @Valid @RequestBody ShowtimeSeatStatusDTO dto) {
+    public Result<ShowtimeSeatStatusVO> updateSeatStatus(@PathVariable Long id,
+                                                          @Valid @RequestBody ShowtimeSeatStatusDTO dto) {
         log.info("批量设置座位状态, showtimeId: {}, targetStatus: {}, count: {}", id, dto.getStatus(), dto.getSeatIds().size());
-        Map<String, Object> result = showtimeService.updateSeatStatus(id, dto);
-        return Result.success(result);
+        ShowtimeSeatStatusVO showtimeSeatStatusVO = showtimeService.updateSeatStatus(id, dto);
+        return Result.success(showtimeSeatStatusVO);
     }
 
     /**

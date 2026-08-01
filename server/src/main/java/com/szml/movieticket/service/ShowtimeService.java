@@ -7,9 +7,8 @@ import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
-
-import java.util.Map;
 
 /**
  * 场次服务接口。
@@ -44,7 +43,7 @@ public interface ShowtimeService extends IService<Showtime> {
      *
      * @param showtimeId 场次ID
      * @param dto        座位ID列表 + 目标状态
-     * @return { updatedSeatIds: [...], skippedSeatIds: [...], skippedReason: "..." }
+     * @return 更新结果（成功/跳过的座位列表）
      */
-    Map<String, Object> updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto);
+    ShowtimeSeatStatusVO updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto);
 }
