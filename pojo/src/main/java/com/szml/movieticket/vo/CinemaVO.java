@@ -35,6 +35,15 @@ public class CinemaVO {
 
     private List<String> services;
 
+    /** 最低票价（元） */
+    private Double minPrice;
+
+    /** 距离（km） */
+    private Double distance;
+
+    /** 该影院的厅型列表 */
+    private List<String> hallTypes;
+
     /** 影厅数量 */
     private Integer hallCount;
 

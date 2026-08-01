@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.szml.movieticket.dto.ShowtimeCreateDTO;
+import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
 import com.szml.movieticket.dto.ShowtimeStatusDTO;
 import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
 import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Movie;
 import com.szml.movieticket.entity.Showtime;
+import com.szml.movieticket.entity.ShowtimeSeat;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.ShowtimeException;
@@ -17,16 +19,18 @@ import com.szml.movieticket.mapper.CinemaMapper;
 import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.MovieMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
+import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,6 +43,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> implements ShowtimeService {
 
     private static final int CLEANING_MINUTES = 10;
@@ -46,12 +51,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     private final MovieMapper movieMapper;
     private final HallMapper hallMapper;
     private final CinemaMapper cinemaMapper;
-
-    public ShowtimeServiceImpl(MovieMapper movieMapper, HallMapper hallMapper, CinemaMapper cinemaMapper) {
-        this.movieMapper = movieMapper;
-        this.hallMapper = hallMapper;
-        this.cinemaMapper = cinemaMapper;
-    }
+    private final ShowtimeSeatMapper showtimeSeatMapper;
 
     @Override
     public ShowtimePageVO pageShowtimes(int page, int size, Long movieId, Long cinemaId, String date, String status) {
@@ -177,6 +177,52 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         log.info("场次状态变更, id: {}, newStatus: {}", id, dto.getStatus());
         return toVO(showtime);
+    }
+
+    @Override
+    public ShowtimeSeatStatusVO updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto) {
+        List<Long> updatedSeatIds = new ArrayList<>();
+        List<Long> skippedSeatIds = new ArrayList<>();
+
+        List<ShowtimeSeat> seats = showtimeSeatMapper.selectList(
+                new LambdaQueryWrapper<ShowtimeSeat>()
+                        .eq(ShowtimeSeat::getShowtimeId, showtimeId)
+                        .in(ShowtimeSeat::getId, dto.getSeatIds()));
+
+        for (ShowtimeSeat seat : seats) {
+            if ("UNAVAILABLE".equals(dto.getStatus())) {
+                if (seat.getStatus() == 2 || seat.getStatus() == 1) {
+                    skippedSeatIds.add(seat.getId());
+                    continue;
+                }
+                seat.setStatus(3);
+                updatedSeatIds.add(seat.getId());
+            } else if ("AVAILABLE".equals(dto.getStatus())) {
+                if (seat.getStatus() != 3) {
+                    skippedSeatIds.add(seat.getId());
+                    continue;
+                }
+                seat.setStatus(0);
+                updatedSeatIds.add(seat.getId());
+            }
+        }
+
+        for (ShowtimeSeat seat : seats) {
+            if (updatedSeatIds.contains(seat.getId())) {
+                showtimeSeatMapper.updateById(seat);
+            }
+        }
+
+        log.info("座位状态批量更新, showtimeId: {}, targetStatus: {}, updated: {}, skipped: {}",
+                showtimeId, dto.getStatus(), updatedSeatIds.size(), skippedSeatIds.size());
+
+        ShowtimeSeatStatusVO result = new ShowtimeSeatStatusVO();
+        result.setUpdatedSeatIds(updatedSeatIds);
+        result.setSkippedSeatIds(skippedSeatIds);
+        if (!skippedSeatIds.isEmpty()) {
+            result.setSkippedReason("座位已被售出或锁定，不可修改状态");
+        }
+        return result;
     }
 
     /**

@@ -8,6 +8,8 @@ import com.szml.movieticket.entity.Movie;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 
+import java.util.Map;
+
 /**
  * 影片服务接口。
  *
@@ -40,4 +42,14 @@ public interface MovieService extends IService<Movie> {
      * 上下架影片。
      */
     MovieVO updateMovieStatus(Long id, MovieStatusDTO dto);
+
+    /**
+     * C端分页查询影片列表（含 showtimeCount、cinemaCount 统计）。
+     */
+    MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword);
+
+    /**
+     * C端影片详情（含 todayShowtimeCoverage）。
+     */
+    MovieVO getMovieDetailForUser(Long id);
 }

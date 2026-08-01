@@ -14,10 +14,33 @@ public interface AuthService extends IService<User> {
 
     /**
      * 手机号 + 密码登录。
-     *
-     * @param phone    手机号
-     * @param password 明文密码
-     * @return JWT 双令牌 + 用户信息
      */
     LoginVO login(String phone, String password);
+
+    /**
+     * 发送邮箱验证码。
+     *
+     * @param email   接收邮箱
+     * @param purpose 用途：0=注册 1=找回密码
+     */
+    void sendEmailCode(String email, Integer purpose);
+
+    /**
+     * 用户注册。
+     *
+     * @param phone    手机号
+     * @param email    邮箱
+     * @param password 密码
+     * @param code     邮箱验证码
+     */
+    void register(String phone, String email, String password, String code);
+
+    /**
+     * 找回密码。
+     *
+     * @param email       邮箱
+     * @param code        验证码
+     * @param newPassword 新密码
+     */
+    void resetPassword(String email, String code, String newPassword);
 }

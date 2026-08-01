@@ -11,7 +11,7 @@ import lombok.Getter;
 @Getter
 public enum ErrorCode {
 
-    SUCCESS(0, "成功"),
+    SUCCESS(1, "成功"),
 
     /** 参数校验失败 */
     PARAM_ERROR(400, "参数校验失败"),
@@ -31,6 +31,10 @@ public enum ErrorCode {
     AUTH_WRONG_PASSWORD(1001, "手机号或密码不正确"),
     AUTH_ACCOUNT_DISABLED(1002, "账号已被禁用，请联系管理员"),
     AUTH_ACCOUNT_LOCKED(1003, "账号已被锁定，请稍后重试"),
+    EMAIL_CODE_INVALID(1004, "验证码错误或已过期"),
+    EMAIL_CODE_RATE_LIMIT(1005, "请60秒后再发送验证码"),
+    USER_EMAIL_EXISTS(1006, "该邮箱已被注册"),
+    USER_PHONE_EXISTS(1007, "该手机号已被注册"),
 
     // ---- 影片（2000-2999）----
 
@@ -55,11 +59,15 @@ public enum ErrorCode {
     SHOWTIME_TIME_CONFLICT(5001, "该时间段与已有场次冲突"),
     SHOWTIME_HAS_LOCKED_SEATS(5002, "该场次已有锁座或订单，不可修改时间"),
 
-    // ---- 文件（6000-6999）----
+    // ---- 订单（6000-6999）----
 
-    FILE_UPLOAD_ERROR(6000, "文件上传失败"),
-    FILE_FORMAT_INVALID(6001, "仅支持 jpg/png/webp 格式的图片文件"),
-    FILE_SIZE_EXCEED(6002, "文件大小不能超过 5MB");
+    ORDER_NOT_FOUND(6000, "订单不存在"),
+
+    // ---- 文件（7000-7999）----
+
+    FILE_UPLOAD_ERROR(7000, "文件上传失败"),
+    FILE_FORMAT_INVALID(7001, "仅支持 jpg/png/webp 格式的图片文件"),
+    FILE_SIZE_EXCEED(7002, "文件大小不能超过 5MB");
 
     private final int code;
     private final String message;

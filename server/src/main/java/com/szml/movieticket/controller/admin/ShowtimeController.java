@@ -1,11 +1,13 @@
 package com.szml.movieticket.controller.admin;
 
 import com.szml.movieticket.dto.ShowtimeCreateDTO;
+import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
 import com.szml.movieticket.dto.ShowtimeStatusDTO;
 import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,8 @@ public class ShowtimeController {
                                         @RequestParam(required = false) Long cinemaId,
                                         @RequestParam(required = false) String date,
                                         @RequestParam(required = false) String status) {
+        log.info("B端查询场次列表, 页码: {}, 每页条数: {}, 影片ID: {}, 影院ID: {}, 日期: {}, 状态: {}",
+                page, size, movieId, cinemaId, date, status);
         ShowtimePageVO showtimePageVO = showtimeService.pageShowtimes(page, size, movieId, cinemaId, date, status);
         return Result.success(showtimePageVO);
     }
@@ -45,7 +49,7 @@ public class ShowtimeController {
      */
     @PostMapping
     public Result<ShowtimeVO> create(@Valid @RequestBody ShowtimeCreateDTO dto) {
-        log.info("新增场次, movieId: {}, hallId: {}, startAt: {}", dto.getMovieId(), dto.getHallId(), dto.getStartAt());
+        log.info("新增场次, 影片ID: {}, 影厅ID: {}, 开场时间: {}", dto.getMovieId(), dto.getHallId(), dto.getStartAt());
         ShowtimeVO showtimeVO = showtimeService.createShowtime(dto);
         return Result.success(showtimeVO);
     }
@@ -55,9 +59,20 @@ public class ShowtimeController {
      */
     @PutMapping("/{id}")
     public Result<ShowtimeVO> update(@PathVariable Long id, @RequestBody ShowtimeUpdateDTO dto) {
-        log.info("编辑场次, id: {}", id);
+        log.info("编辑场次, 场次ID: {}", id);
         ShowtimeVO showtimeVO = showtimeService.updateShowtime(id, dto);
         return Result.success(showtimeVO);
+    }
+
+    /**
+     * 批量设置场次座位状态。
+     */
+    @PutMapping("/{id}/seats/status")
+    public Result<ShowtimeSeatStatusVO> updateSeatStatus(@PathVariable Long id,
+                                                          @Valid @RequestBody ShowtimeSeatStatusDTO dto) {
+        log.info("批量设置座位状态, 场次ID: {}, 目标状态: {}, 座位数量: {}", id, dto.getStatus(), dto.getSeatIds().size());
+        ShowtimeSeatStatusVO showtimeSeatStatusVO = showtimeService.updateSeatStatus(id, dto);
+        return Result.success(showtimeSeatStatusVO);
     }
 
     /**
@@ -65,7 +80,7 @@ public class ShowtimeController {
      */
     @PutMapping("/{id}/status")
     public Result<ShowtimeVO> updateStatus(@PathVariable Long id, @Valid @RequestBody ShowtimeStatusDTO dto) {
-        log.info("变更场次状态, id: {}, targetStatus: {}", id, dto.getStatus());
+        log.info("变更场次状态, 场次ID: {}, 目标状态: {}", id, dto.getStatus());
         ShowtimeVO showtimeVO = showtimeService.updateShowtimeStatus(id, dto);
         return Result.success(showtimeVO);
     }

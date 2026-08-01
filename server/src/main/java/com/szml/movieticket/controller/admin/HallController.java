@@ -31,7 +31,7 @@ public class HallController {
      */
     @GetMapping("/api/admin/cinemas/{cinemaId}/halls")
     public Result<List<HallVO>> listByCinema(@PathVariable Long cinemaId) {
-        log.info("查询影厅列表, cinemaId: {}", cinemaId);
+        log.info("查询影厅列表, 影院ID: {}", cinemaId);
         List<HallVO> hallVOList = hallService.listHallsByCinemaId(cinemaId);
         return Result.success(hallVOList);
     }
@@ -41,7 +41,7 @@ public class HallController {
      */
     @PostMapping("/api/admin/halls")
     public Result<HallVO> create(@Valid @RequestBody HallCreateDTO dto) {
-        log.info("新增影厅, name: {}, cinemaId: {}", dto.getName(), dto.getCinemaId());
+        log.info("新增影厅, 影厅名称: {}, 影院ID: {}", dto.getName(), dto.getCinemaId());
         HallVO hallVO = hallService.createHall(dto);
         return Result.success(hallVO);
     }
@@ -51,7 +51,7 @@ public class HallController {
      */
     @PutMapping("/api/admin/halls/{id}")
     public Result<HallVO> update(@PathVariable Long id, @RequestBody HallUpdateDTO dto) {
-        log.info("编辑影厅, id: {}", id);
+        log.info("编辑影厅, 影厅ID: {}", id);
         HallVO hallVO = hallService.updateHall(id, dto);
         return Result.success(hallVO);
     }
@@ -61,7 +61,7 @@ public class HallController {
      */
     @GetMapping("/api/admin/halls/{hallId}/seats")
     public Result<HallSeatVO> seats(@PathVariable Long hallId) {
-        log.info("查询影厅座位布局, hallId: {}", hallId);
+        log.info("查询影厅座位布局, 影厅ID: {}", hallId);
         HallSeatVO hallSeatVO = hallService.getHallSeats(hallId);
         return Result.success(hallSeatVO);
     }

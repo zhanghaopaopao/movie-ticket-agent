@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class Result<T> {
 
-    /** 业务状态码，0 表示成功 */
+    /** 业务状态码，1 表示成功 */
     private int code;
 
     /** 提示信息 */

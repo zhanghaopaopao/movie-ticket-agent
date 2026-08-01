@@ -8,20 +8,25 @@ import com.szml.movieticket.dto.CinemaCreateDTO;
 import com.szml.movieticket.dto.CinemaStatusDTO;
 import com.szml.movieticket.dto.CinemaUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
+import com.szml.movieticket.entity.Hall;
+import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.CinemaStatus;
+import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.CinemaException;
 import com.szml.movieticket.mapper.CinemaMapper;
+import com.szml.movieticket.mapper.HallMapper;
+import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.service.CinemaService;
 import com.szml.movieticket.vo.CinemaPageVO;
 import com.szml.movieticket.vo.CinemaVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -32,7 +37,11 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> implements CinemaService {
+
+    private final HallMapper hallMapper;
+    private final ShowtimeMapper showtimeMapper;
 
     @Override
     public CinemaPageVO pageCinemas(int page, int size, String keyword, String district, Integer status) {
@@ -115,8 +124,17 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         }
 
         if (dto.getStatus() == CinemaStatus.INACTIVE) {
-            // TODO: 接入 showtime 表后查询 count WHERE cinema_id = id AND status = ON_SALE
-            log.warn("影院停用操作，暂未校验在售场次, cinemaId: {}", id);
+            List<Hall> halls = hallMapper.selectList(new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, id));
+            if (!halls.isEmpty()) {
+                List<Long> hallIds = halls.stream().map(Hall::getId).toList();
+                long activeCount = showtimeMapper.selectCount(
+                        new LambdaQueryWrapper<Showtime>()
+                                .in(Showtime::getHallId, hallIds)
+                                .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                if (activeCount > 0) {
+                    throw new CinemaException(ErrorCode.CINEMA_HAS_ACTIVE_SHOWTIMES);
+                }
+            }
         }
 
         cinema.setStatus(dto.getStatus());
@@ -124,6 +142,97 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
 
         log.info("影院状态变更, id: {}, newStatus: {}", id, dto.getStatus());
         return toVO(cinema);
+    }
+
+    @Override
+    public CinemaPageVO listCinemasForUser(int page, int size, String district, String brand, String hallType, String keyword) {
+        LambdaQueryWrapper<Cinema> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Cinema::getStatus, CinemaStatus.ACTIVE);
+        if (StringUtils.hasText(keyword)) {
+            wrapper.like(Cinema::getName, keyword);
+        }
+        if (StringUtils.hasText(district)) {
+            wrapper.eq(Cinema::getDistrict, district);
+        }
+        if (StringUtils.hasText(brand)) {
+            wrapper.eq(Cinema::getBrand, brand);
+        }
+        if (StringUtils.hasText(hallType)) {
+            // 查有该厅型的影院
+            List<Hall> halls = hallMapper.selectList(
+                    new LambdaQueryWrapper<Hall>().eq(Hall::getHallType, hallType));
+            Set<Long> cinemaIds = halls.stream().map(Hall::getCinemaId).collect(Collectors.toSet());
+            if (cinemaIds.isEmpty()) {
+                CinemaPageVO empty = new CinemaPageVO();
+                empty.setTotal(0); empty.setPage(page); empty.setSize(size); empty.setRecords(new ArrayList<>());
+                return empty;
+            }
+            wrapper.in(Cinema::getId, cinemaIds);
+        }
+        wrapper.orderByDesc(Cinema::getCreateTime);
+
+        Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
+        List<CinemaVO> records = pageResult.getRecords().stream().map(cinema -> {
+            CinemaVO vo = toVO(cinema);
+            vo.setHallTypes(getHallTypes(cinema.getId()));
+            vo.setMinPrice(getMinPrice(cinema.getId()));
+            return vo;
+        }).collect(Collectors.toList());
+
+        CinemaPageVO pageVO = new CinemaPageVO();
+        pageVO.setTotal(pageResult.getTotal());
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(records);
+        return pageVO;
+    }
+
+    @Override
+    public CinemaPageVO listNearbyCinemas(int page, int size, double lat, double lng, int radius) {
+        // 矩形预筛选（1°≈111km）
+        double latRange = radius / 111.0;
+        double lngRange = radius / (111.0 * Math.cos(Math.toRadians(lat)));
+
+        LambdaQueryWrapper<Cinema> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Cinema::getStatus, CinemaStatus.ACTIVE)
+                .isNotNull(Cinema::getLatitude)
+                .isNotNull(Cinema::getLongitude)
+                .between(Cinema::getLatitude, lat - latRange, lat + latRange)
+                .between(Cinema::getLongitude, lng - lngRange, lng + lngRange);
+
+        List<Cinema> cinemas = list(wrapper);
+
+        // Java 层 Haversine 精算距离并排序
+        List<Cinema> sorted = cinemas.stream()
+                .filter(c -> {
+                    double distance = haversine(lat, lng,
+                            c.getLatitude().doubleValue(), c.getLongitude().doubleValue());
+                    return distance <= radius;
+                })
+                .sorted(Comparator.comparingDouble(c ->
+                        haversine(lat, lng,
+                                c.getLatitude().doubleValue(), c.getLongitude().doubleValue())))
+                .toList();
+
+        // 分页
+        int start = (page - 1) * size;
+        int end = Math.min(start + size, sorted.size());
+        List<Cinema> pageList = start < sorted.size() ? sorted.subList(start, end) : new ArrayList<>();
+
+        List<CinemaVO> records = pageList.stream().map(cinema -> {
+            CinemaVO vo = toVO(cinema);
+            vo.setDistance(haversine(lat, lng, cinema.getLatitude().doubleValue(), cinema.getLongitude().doubleValue()));
+            vo.setHallTypes(getHallTypes(cinema.getId()));
+            vo.setMinPrice(getMinPrice(cinema.getId()));
+            return vo;
+        }).collect(Collectors.toList());
+
+        CinemaPageVO pageVO = new CinemaPageVO();
+        pageVO.setTotal(sorted.size());
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(records);
+        return pageVO;
     }
 
     private LambdaQueryWrapper<Cinema> buildQueryWrapper(String keyword, String district, Integer status) {
@@ -149,5 +258,42 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         vo.setHallCount(0);
         vo.setShowtimeCount(0);
         return vo;
+    }
+
+    private List<String> getHallTypes(Long cinemaId) {
+        List<Hall> halls = hallMapper.selectList(
+                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinemaId));
+        return halls.stream()
+                .map(h -> h.getHallType() != null ? h.getHallType().getCode() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private Double getMinPrice(Long cinemaId) {
+        List<Hall> halls = hallMapper.selectList(
+                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinemaId));
+        if (halls.isEmpty()) return null;
+        List<Long> hallIds = halls.stream().map(Hall::getId).toList();
+        List<Showtime> showtimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .in(Showtime::getHallId, hallIds)
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                        .orderByAsc(Showtime::getBasePrice));
+        if (showtimes.isEmpty()) return null;
+        return showtimes.get(0).getBasePrice() != null
+                ? showtimes.get(0).getBasePrice() / 100.0 : null;
+    }
+
+    /**
+     * Haversine 公式计算两点间距离（km）。
+     */
+    private double haversine(double lat1, double lng1, double lat2, double lng2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 }
