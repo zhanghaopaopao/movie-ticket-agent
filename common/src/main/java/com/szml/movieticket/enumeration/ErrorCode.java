@@ -55,7 +55,11 @@ public enum ErrorCode {
     SHOWTIME_TIME_CONFLICT(5001, "该时间段与已有场次冲突"),
     SHOWTIME_HAS_LOCKED_SEATS(5002, "该场次已有锁座或订单，不可修改时间"),
 
-    // ---- 文件（6000-6999）----
+    // ---- 订单（6000-6999）----
+
+    ORDER_NOT_FOUND(6000, "订单不存在"),
+
+    // ---- 文件（7000-7999）----
 
     FILE_UPLOAD_ERROR(6000, "文件上传失败"),
     FILE_FORMAT_INVALID(6001, "仅支持 jpg/png/webp 格式的图片文件"),
