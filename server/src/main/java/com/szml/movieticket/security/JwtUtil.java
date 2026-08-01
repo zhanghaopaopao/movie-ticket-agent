@@ -41,6 +41,7 @@ JwtUtil {
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + EXPIRATION_MS))
                 .signWith(secretKey)
+                .compact();
     }
 
     /**
