@@ -39,6 +39,9 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
     private static final long CODE_TTL_SECONDS = 600;
     private static final long CODE_RATE_LIMIT_SECONDS = 60;
     private static final String REDIS_KEY_PREFIX = "email_code:";
+    private static final String REDIS_LOGIN_FAIL_PREFIX = "login_fail:";
+    private static final int MAX_LOGIN_FAIL_COUNT = 5;
+    private static final int LOCK_MINUTES = 15;
 
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
@@ -48,22 +51,46 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
     public LoginVO login(String phone, String password) {
         log.info("用户登录请求, phone: {}", phone);
 
+        // 检查 Redis 失败计数器（防暴力破解）
+        String failKey = REDIS_LOGIN_FAIL_PREFIX + phone;
+        String failCountStr = stringRedisTemplate.opsForValue().get(failKey);
+        int failCount = failCountStr != null ? Integer.parseInt(failCountStr) : 0;
+        if (failCount >= MAX_LOGIN_FAIL_COUNT) {
+            log.warn("登录失败，账号已锁定(Redis), phone: {}, failCount: {}", phone, failCount);
+            throw new AuthException(ErrorCode.AUTH_ACCOUNT_LOCKED);
+        }
+
         User user = getOne(new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
         if (user == null) {
             log.warn("登录失败，账号不存在, phone: {}", phone);
+            incrementFailCount(failKey);
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_NOT_FOUND);
         }
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.warn("登录失败，账号已禁用, userId: {}", user.getId());
+            incrementFailCount(failKey);
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_DISABLED);
         }
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(java.time.LocalDateTime.now())) {
-            log.warn("登录失败，账号已锁定, userId: {}", user.getId());
+            log.warn("登录失败，账号已锁定(DB), userId: {}", user.getId());
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_LOCKED);
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             log.warn("登录失败，密码错误, userId: {}", user.getId());
+            int newFailCount = incrementFailCount(failKey);
+            if (newFailCount >= MAX_LOGIN_FAIL_COUNT) {
+                user.setLockedUntil(java.time.LocalDateTime.now().plusMinutes(LOCK_MINUTES));
+                updateById(user);
+                log.warn("登录失败已达{}次，账号已锁定, userId: {}, lockedUntil: {}", MAX_LOGIN_FAIL_COUNT, user.getId(), user.getLockedUntil());
+            }
             throw new AuthException(ErrorCode.AUTH_WRONG_PASSWORD);
+        }
+
+        // 登录成功：清除失败计数 + 清空 lockedUntil
+        stringRedisTemplate.delete(failKey);
+        if (user.getLockedUntil() != null) {
+            user.setLockedUntil(null);
+            updateById(user);
         }
 
         String token = jwtUtil.generateToken(user.getId(), user.getRole());
@@ -81,6 +108,15 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         log.info("用户登录成功, userId: {}, role: {}", user.getId(), user.getRole());
         return loginVO;
+    }
+
+    /**
+     * 递增登录失败计数（Redis 计数器，TTL = 锁定时间）。
+     */
+    private int incrementFailCount(String failKey) {
+        Long newCount = stringRedisTemplate.opsForValue().increment(failKey);
+        stringRedisTemplate.expire(failKey, Duration.ofMinutes(LOCK_MINUTES));
+        return newCount != null ? newCount.intValue() : 0;
     }
 
     @Override
