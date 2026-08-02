@@ -14,6 +14,8 @@ import com.szml.movieticket.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -48,6 +50,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
+    private final JavaMailSender mailSender;
 
     @Override
     public LoginVO login(String phone, String password) {
@@ -124,9 +127,22 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         String codeHash = sha256(code);
         stringRedisTemplate.opsForValue().set(redisKey, codeHash, Duration.ofSeconds(CODE_TTL_SECONDS));
 
-        log.info("========== 验证码 ==========");
-        log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purpose == 0 ? "注册" : "找回密码", code);
-        log.info("============================");
+        // 发送邮件
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("2571761868@qq.com");
+            message.setTo(email);
+            message.setSubject("电影票智能体 - 验证码");
+            message.setText("您的验证码是：" + code + "，10分钟内有效，请勿泄露。");
+            mailSender.send(message);
+            log.info("验证码邮件已发送, email: {}, purpose: {}", email, purpose == 0 ? "注册" : "找回密码");
+        } catch (Exception e) {
+            log.error("验证码邮件发送失败, email: {}", email, e);
+            // 发送失败但验证码已存 Redis，开发环境可从日志查看
+            log.info("========== 验证码(邮件发送失败兜底) ==========");
+            log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purpose == 0 ? "注册" : "找回密码", code);
+            log.info("==========================================");
+        }
     }
 
     @Override
