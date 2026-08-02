@@ -7,6 +7,7 @@ import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatLayoutVO;
 import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 import jakarta.validation.Valid;
@@ -73,6 +74,15 @@ public class ShowtimeController {
         log.info("批量设置座位状态, 场次ID: {}, 目标状态: {}, 座位数量: {}", id, dto.getStatus(), dto.getSeatIds().size());
         ShowtimeSeatStatusVO showtimeSeatStatusVO = showtimeService.updateSeatStatus(id, dto);
         return Result.success(showtimeSeatStatusVO);
+    }
+
+    /**
+     * 查询场次座位库存布局。
+     */
+    @GetMapping("/{id}/seats")
+    public Result<ShowtimeSeatLayoutVO> seats(@PathVariable Long id) {
+        log.info("查询场次座位库存, showtimeId: {}", id);
+        return Result.success(showtimeService.getSeatLayout(id));
     }
 
     /**

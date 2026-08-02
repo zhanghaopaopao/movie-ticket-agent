@@ -8,6 +8,7 @@ import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
 import com.szml.movieticket.vo.ShowtimePageVO;
 import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
+import com.szml.movieticket.vo.ShowtimeSeatLayoutVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 
 /**
@@ -46,4 +47,7 @@ public interface ShowtimeService extends IService<Showtime> {
      * @return 更新结果（成功/跳过的座位列表）
      */
     ShowtimeSeatStatusVO updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto);
+
+    /** 查询场次座位库存布局。 */
+    ShowtimeSeatLayoutVO getSeatLayout(Long showtimeId);
 }

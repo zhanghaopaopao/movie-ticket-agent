@@ -10,6 +10,7 @@ import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
 import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Movie;
+import com.szml.movieticket.entity.Seat;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.entity.ShowtimeSeat;
 import com.szml.movieticket.enumeration.ErrorCode;
@@ -18,21 +19,26 @@ import com.szml.movieticket.exception.ShowtimeException;
 import com.szml.movieticket.mapper.CinemaMapper;
 import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.MovieMapper;
+import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.ShowtimeService;
 import com.szml.movieticket.vo.ShowtimePageVO;
+import com.szml.movieticket.vo.ShowtimeSeatLayoutVO;
 import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -47,13 +53,20 @@ import java.util.stream.Collectors;
 public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> implements ShowtimeService {
 
     private static final int CLEANING_MINUTES = 10;
+    private static final int INVENTORY_AVAILABLE = 0;
+    private static final int INVENTORY_LOCKED = 1;
+    private static final int INVENTORY_SOLD = 2;
+    private static final int INVENTORY_UNAVAILABLE = 3;
+    private static final int INVENTORY_COUPLE = 4;
 
     private final MovieMapper movieMapper;
     private final HallMapper hallMapper;
     private final CinemaMapper cinemaMapper;
+    private final SeatMapper seatMapper;
     private final ShowtimeSeatMapper showtimeSeatMapper;
 
     @Override
+    @Transactional
     public ShowtimePageVO pageShowtimes(int page, int size, Long movieId, Long cinemaId, String date, String status) {
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<>();
         if (movieId != null) {
@@ -93,6 +106,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     }
 
     @Override
+    @Transactional
     public ShowtimeVO createShowtime(ShowtimeCreateDTO dto) {
         Movie movie = movieMapper.selectById(dto.getMovieId());
         if (movie == null) {
@@ -117,7 +131,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         showtime.setStatus(ShowtimeStatus.ON_SALE);
         save(showtime);
 
-        // TODO: 从 seat WHERE hall_id = ? 全量复制到 showtime_seat
+        initializeShowtimeSeats(showtime);
         log.info("场次新增成功, id: {}, movieId: {}, hallId: {}, startAt: {}", showtime.getId(), dto.getMovieId(), dto.getHallId(), startAt);
 
         return toVO(showtime);
@@ -180,30 +194,66 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     }
 
     @Override
+    @Transactional
     public ShowtimeSeatStatusVO updateSeatStatus(Long showtimeId, ShowtimeSeatStatusDTO dto) {
+        if (dto == null || (!"AVAILABLE".equals(dto.getStatus())
+                && !"UNAVAILABLE".equals(dto.getStatus()))) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_SEAT_STATUS_INVALID);
+        }
+        if (dto.getSeatIds() == null || dto.getSeatIds().isEmpty()) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_SEAT_NOT_FOUND);
+        }
+        Showtime showtime = getById(showtimeId);
+        if (showtime == null) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        initializeShowtimeSeats(showtime);
+
         List<Long> updatedSeatIds = new ArrayList<>();
         List<Long> skippedSeatIds = new ArrayList<>();
 
+        List<Long> requestedSeatIds = dto.getSeatIds().stream().distinct().toList();
         List<ShowtimeSeat> seats = showtimeSeatMapper.selectList(
                 new LambdaQueryWrapper<ShowtimeSeat>()
                         .eq(ShowtimeSeat::getShowtimeId, showtimeId)
-                        .in(ShowtimeSeat::getId, dto.getSeatIds()));
+                        .in(ShowtimeSeat::getId, requestedSeatIds));
+        if (seats.size() != requestedSeatIds.size()) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_SEAT_NOT_FOUND);
+        }
+
+        Map<Long, Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
+                        .in(Seat::getId, seats.stream().map(ShowtimeSeat::getSeatId).toList()))
+                .stream()
+                .collect(Collectors.toMap(Seat::getId, seat -> seat));
 
         for (ShowtimeSeat seat : seats) {
+            Seat physicalSeat = physicalSeats.get(seat.getSeatId());
+            int currentStatus = seat.getStatus() == null
+                    ? (physicalSeat == null ? INVENTORY_UNAVAILABLE : inventoryStatus(physicalSeat))
+                    : seat.getStatus();
             if ("UNAVAILABLE".equals(dto.getStatus())) {
-                if (seat.getStatus() == 2 || seat.getStatus() == 1) {
+                if (physicalSeat == null || currentStatus == INVENTORY_SOLD
+                        || currentStatus == INVENTORY_LOCKED || currentStatus == INVENTORY_UNAVAILABLE) {
                     skippedSeatIds.add(seat.getId());
                     continue;
                 }
-                seat.setStatus(3);
+                seat.setStatus(INVENTORY_UNAVAILABLE);
                 updatedSeatIds.add(seat.getId());
             } else if ("AVAILABLE".equals(dto.getStatus())) {
-                if (seat.getStatus() != 3) {
+                if (currentStatus == INVENTORY_SOLD || currentStatus == INVENTORY_LOCKED
+                        || physicalSeat == null || (physicalSeat.getStatus() != null && physicalSeat.getStatus() == 1)
+                        || (currentStatus != INVENTORY_UNAVAILABLE
+                        && currentStatus != INVENTORY_AVAILABLE
+                        && currentStatus != INVENTORY_COUPLE)) {
                     skippedSeatIds.add(seat.getId());
                     continue;
                 }
-                seat.setStatus(0);
-                updatedSeatIds.add(seat.getId());
+                if (currentStatus == INVENTORY_UNAVAILABLE) {
+                    seat.setStatus(inventoryStatus(physicalSeat));
+                    updatedSeatIds.add(seat.getId());
+                } else {
+                    skippedSeatIds.add(seat.getId());
+                }
             }
         }
 
@@ -222,6 +272,91 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (!skippedSeatIds.isEmpty()) {
             result.setSkippedReason("座位已被售出或锁定，不可修改状态");
         }
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public ShowtimeSeatLayoutVO getSeatLayout(Long showtimeId) {
+        Showtime showtime = getById(showtimeId);
+        if (showtime == null) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        initializeShowtimeSeats(showtime);
+
+        Hall hall = hallMapper.selectById(showtime.getHallId());
+        if (hall == null) {
+            throw new ShowtimeException(ErrorCode.HALL_NOT_FOUND);
+        }
+        Movie movie = movieMapper.selectById(showtime.getMovieId());
+        Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
+
+        List<Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
+                .eq(Seat::getHallId, hall.getId())
+                .orderByAsc(Seat::getRowNo)
+                .orderByAsc(Seat::getSeatNo));
+        List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
+                .eq(ShowtimeSeat::getShowtimeId, showtimeId));
+        Map<Long, ShowtimeSeat> inventoryByPhysicalId = inventories.stream()
+                .collect(Collectors.toMap(ShowtimeSeat::getSeatId, seat -> seat));
+
+        Map<Integer, List<ShowtimeSeatLayoutVO.SeatVO>> rowMap = new LinkedHashMap<>();
+        int availableSeats = 0;
+        int lockedSeats = 0;
+        int soldSeats = 0;
+        int unavailableSeats = 0;
+        for (Seat physicalSeat : physicalSeats) {
+            ShowtimeSeat inventory = inventoryByPhysicalId.get(physicalSeat.getId());
+            if (inventory == null) {
+                continue;
+            }
+            int status = inventory.getStatus() == null
+                    ? inventoryStatus(physicalSeat)
+                    : inventory.getStatus();
+            if (status == INVENTORY_AVAILABLE || status == INVENTORY_COUPLE) {
+                availableSeats++;
+            } else if (status == INVENTORY_LOCKED) {
+                lockedSeats++;
+            } else if (status == INVENTORY_SOLD) {
+                soldSeats++;
+            } else if (status == INVENTORY_UNAVAILABLE) {
+                unavailableSeats++;
+            }
+
+            ShowtimeSeatLayoutVO.SeatVO seatVO = new ShowtimeSeatLayoutVO.SeatVO();
+            seatVO.setId(inventory.getId());
+            seatVO.setPhysicalSeatId(physicalSeat.getId());
+            seatVO.setSeatNo(physicalSeat.getSeatNo());
+            seatVO.setZone(physicalSeat.getZone());
+            seatVO.setSeatType(physicalSeat.getSeatType() != null && physicalSeat.getSeatType() == 1
+                    ? "COUPLE" : "NORMAL");
+            seatVO.setStatus(inventoryStatusName(status));
+            seatVO.setPrice(inventory.getPrice() != null ? inventory.getPrice() : showtime.getBasePrice());
+            rowMap.computeIfAbsent(physicalSeat.getRowNo(), key -> new ArrayList<>()).add(seatVO);
+        }
+
+        List<ShowtimeSeatLayoutVO.RowVO> rows = new ArrayList<>();
+        rowMap.forEach((rowNo, seats) -> {
+            ShowtimeSeatLayoutVO.RowVO row = new ShowtimeSeatLayoutVO.RowVO();
+            row.setRowNo(rowNo);
+            row.setSeats(seats);
+            rows.add(row);
+        });
+
+        ShowtimeSeatLayoutVO result = new ShowtimeSeatLayoutVO();
+        result.setShowtimeId(showtimeId);
+        result.setMovieName(movie != null ? movie.getName() : null);
+        result.setCinemaName(cinema != null ? cinema.getName() : null);
+        result.setHallName(hall.getName());
+        result.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
+        result.setStartAt(showtime.getStartAt());
+        result.setBasePrice(showtime.getBasePrice());
+        result.setTotalSeats(physicalSeats.size());
+        result.setAvailableSeats(availableSeats);
+        result.setLockedSeats(lockedSeats);
+        result.setSoldSeats(soldSeats);
+        result.setUnavailableSeats(unavailableSeats);
+        result.setRows(rows);
         return result;
     }
 
@@ -279,10 +414,73 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         vo.setStatus(showtime.getStatus() != null ? showtime.getStatus().getCode() : null);
         vo.setStatusDesc(showtime.getStatus() != null ? showtime.getStatus().getDesc() : null);
-        // TODO: 从 showtime_seat 表统计
-        vo.setSoldSeats(0);
-        vo.setTotalSeats(0);
-        vo.setLockedCount(0);
+        int totalSeats = hall == null ? 0 : Math.toIntExact(seatMapper.selectCount(
+                new LambdaQueryWrapper<Seat>().eq(Seat::getHallId, showtime.getHallId())));
+        List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
+                .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
+        if (inventories.isEmpty() && totalSeats > 0) {
+            initializeShowtimeSeats(showtime);
+            inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
+                    .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
+        }
+        vo.setSoldSeats((int) inventories.stream()
+                .filter(seat -> seat.getStatus() != null && seat.getStatus() == INVENTORY_SOLD)
+                .count());
+        vo.setTotalSeats(totalSeats);
+        vo.setLockedCount((int) inventories.stream()
+                .filter(seat -> seat.getStatus() != null && seat.getStatus() == INVENTORY_LOCKED)
+                .count());
         return vo;
+    }
+
+    private void initializeShowtimeSeats(Showtime showtime) {
+        List<Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
+                .eq(Seat::getHallId, showtime.getHallId()));
+        if (physicalSeats.isEmpty()) {
+            return;
+        }
+        List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
+                .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
+        Map<Long, ShowtimeSeat> inventoryByPhysicalId = inventories.stream()
+                .collect(Collectors.toMap(ShowtimeSeat::getSeatId, seat -> seat));
+        for (Seat physicalSeat : physicalSeats) {
+            ShowtimeSeat inventory = inventoryByPhysicalId.get(physicalSeat.getId());
+            if (inventory == null) {
+                inventory = new ShowtimeSeat();
+                inventory.setShowtimeId(showtime.getId());
+                inventory.setSeatId(physicalSeat.getId());
+                inventory.setPrice(showtime.getBasePrice());
+                inventory.setStatus(inventoryStatus(physicalSeat));
+                inventory.setVersion(0);
+                showtimeSeatMapper.insert(inventory);
+                continue;
+            }
+            if (inventory.getStatus() == null) {
+                inventory.setStatus(inventoryStatus(physicalSeat));
+                showtimeSeatMapper.updateById(inventory);
+            }
+            if (inventory.getPrice() == null) {
+                inventory.setPrice(showtime.getBasePrice());
+                showtimeSeatMapper.updateById(inventory);
+            }
+        }
+    }
+
+    private static int inventoryStatus(Seat seat) {
+        if (seat.getStatus() != null && seat.getStatus() == 1) {
+            return INVENTORY_UNAVAILABLE;
+        }
+        return seat.getSeatType() != null && seat.getSeatType() == 1
+                ? INVENTORY_COUPLE : INVENTORY_AVAILABLE;
+    }
+
+    private static String inventoryStatusName(int status) {
+        return switch (status) {
+            case INVENTORY_LOCKED -> "LOCKED";
+            case INVENTORY_SOLD -> "SOLD";
+            case INVENTORY_UNAVAILABLE -> "UNAVAILABLE";
+            case INVENTORY_COUPLE -> "COUPLE";
+            default -> "AVAILABLE";
+        };
     }
 }

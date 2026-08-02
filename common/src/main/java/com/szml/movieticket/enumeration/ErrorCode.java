@@ -53,11 +53,25 @@ public enum ErrorCode {
     HALL_NOT_FOUND(4000, "影厅不存在"),
     HALL_NAME_DUPLICATE(4001, "该影院下已存在同名影厅"),
 
+    // ---- 座位（4100-4199）----
+
+    SEAT_NOT_FOUND(4100, "座位不存在"),
+    SEAT_POSITION_DUPLICATE(4101, "该影厅下已存在相同排号和座号"),
+    SEAT_POSITION_INVALID(4102, "座位排号和座号必须为正整数"),
+    SEAT_ZONE_INVALID(4103, "座位区域不合法"),
+    SEAT_TYPE_INVALID(4104, "座位类型不合法"),
+    SEAT_STATUS_INVALID(4105, "座位状态不合法"),
+    SEAT_HAS_ACTIVE_INVENTORY(4106, "座位存在锁定或已售库存，不可删除或调整布局"),
+    SEAT_HAS_ORDER_RECORD(4107, "座位存在订单记录，不可删除或调整布局"),
+    SEAT_LAYOUT_INVALID(4108, "座位布局数据不合法"),
+
     // ---- 场次（5000-5999）----
 
     SHOWTIME_NOT_FOUND(5000, "场次不存在"),
     SHOWTIME_TIME_CONFLICT(5001, "该时间段与已有场次冲突"),
     SHOWTIME_HAS_LOCKED_SEATS(5002, "该场次已有锁座或订单，不可修改时间"),
+    SHOWTIME_SEAT_NOT_FOUND(5003, "场次座位不存在"),
+    SHOWTIME_SEAT_STATUS_INVALID(5004, "场次座位状态不合法"),
 
     // ---- 订单（6000-6999）----
 
