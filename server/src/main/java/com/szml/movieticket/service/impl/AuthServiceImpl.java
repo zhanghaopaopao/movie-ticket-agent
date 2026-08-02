@@ -77,6 +77,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             int newFailCount = incrementFailCount(failKey);
             if (newFailCount >= MAX_LOGIN_FAIL_COUNT) {
                 log.warn("登录失败已达{}次，账号已锁定(Redis), phone: {}", MAX_LOGIN_FAIL_COUNT, phone);
+                throw new AuthException(ErrorCode.AUTH_ACCOUNT_LOCKED);
             }
             throw new AuthException(ErrorCode.AUTH_WRONG_PASSWORD);
         }
