@@ -82,6 +82,9 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             throw new MovieException(ErrorCode.MOVIE_NAME_DUPLICATE);
         }
 
+        // 边界校验：上映状态与上映日期的逻辑关系
+        validateMovieStatusAndDate(dto.getStatus(), dto.getReleaseDate());
+
         Movie movie = new Movie();
         BeanUtils.copyProperties(dto, movie);
         save(movie);
@@ -213,5 +216,29 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         }
         vo.setCinemaCount(cinemaIds.size());
         return vo;
+    }
+
+    /**
+     * 校验上映状态与上映日期之间的边界约束。
+     */
+    private void validateMovieStatusAndDate(MovieStatus status, LocalDate releaseDate) {
+        if (status == null || releaseDate == null) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        switch (status) {
+            case NOW_SHOWING:
+                if (releaseDate.isAfter(today)) {
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_PAST);
+                }
+                break;
+            case COMING_SOON:
+                if (!releaseDate.isAfter(today)) {
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_FUTURE);
+                }
+                break;
+            case OFFLINE:
+                throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);
+        }
     }
 }
