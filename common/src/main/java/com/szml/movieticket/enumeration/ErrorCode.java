@@ -77,11 +77,16 @@ public enum ErrorCode {
 
     ORDER_NOT_FOUND(6000, "订单不存在"),
 
-    // ---- 文件（7000-7999）----
+    // ---- 草稿（7000-7999）----
 
-    FILE_UPLOAD_ERROR(7000, "文件上传失败"),
-    FILE_FORMAT_INVALID(7001, "仅支持 jpg/png/webp 格式的图片文件"),
-    FILE_SIZE_EXCEED(7002, "文件大小不能超过 5MB");
+    DRAFT_NOT_FOUND(7000, "草稿不存在"),
+    DRAFT_VERSION_CONFLICT(7001, "草稿已在另一页面更新，请确认后继续"),
+
+    // ---- 文件（8000-8999）----
+
+    FILE_UPLOAD_ERROR(8000, "文件上传失败"),
+    FILE_FORMAT_INVALID(8001, "仅支持 jpg/png/webp 格式的图片文件"),
+    FILE_SIZE_EXCEED(8002, "文件大小不能超过 5MB");
 
     private final int code;
     private final String message;
