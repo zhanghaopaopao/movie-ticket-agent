@@ -23,6 +23,8 @@ import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.ShowtimeService;
+import cn.hutool.json.JSONUtil;
+import com.szml.movieticket.vo.ShowtimeGroupedVO;
 import com.szml.movieticket.vo.ShowtimePageVO;
 import com.szml.movieticket.vo.ShowtimeSeatLayoutVO;
 import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
@@ -358,6 +360,115 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         result.setUnavailableSeats(unavailableSeats);
         result.setRows(rows);
         return result;
+    }
+
+    @Override
+    public ShowtimeGroupedVO listShowtimesForUser(Long movieId, Long cinemaId, String date, String hallType) {
+        LocalDateTime startDate = LocalDateTime.now().toLocalDate().atStartOfDay();
+        LocalDateTime endDate = startDate.plusDays(1);
+        if (StringUtils.hasText(date)) {
+            startDate = LocalDateTime.parse(date + "T00:00:00");
+            endDate = LocalDateTime.parse(date + "T23:59:59");
+        }
+
+        // 查询影院信息
+        Cinema cinema = null;
+        if (cinemaId != null) {
+            cinema = cinemaMapper.selectById(cinemaId);
+        }
+
+        // 查询在售场次
+        LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<>();
+        if (movieId != null) {
+            wrapper.eq(Showtime::getMovieId, movieId);
+        }
+        if (cinemaId != null) {
+            List<Hall> halls = hallMapper.selectList(
+                    new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinemaId));
+            List<Long> hallIds = halls.stream().map(Hall::getId).toList();
+            if (hallIds.isEmpty()) {
+                ShowtimeGroupedVO emptyResult = new ShowtimeGroupedVO();
+                emptyResult.setMovies(new ArrayList<>());
+                return emptyResult;
+            }
+            wrapper.in(Showtime::getHallId, hallIds);
+        }
+        wrapper.eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                .ge(Showtime::getStartAt, startDate)
+                .le(Showtime::getStartAt, endDate);
+
+        if (StringUtils.hasText(hallType)) {
+            List<Hall> halls = hallMapper.selectList(
+                    new LambdaQueryWrapper<Hall>().eq(Hall::getHallType, hallType));
+            List<Long> hallIds = halls.stream().map(Hall::getId).toList();
+            wrapper.in(Showtime::getHallId, hallIds);
+        }
+        wrapper.orderByAsc(Showtime::getStartAt);
+
+        List<Showtime> showtimes = list(wrapper);
+
+        // 按影片ID分组
+        Map<Long, List<Showtime>> groupedByMovie = new LinkedHashMap<>();
+        for (Showtime showtime : showtimes) {
+            groupedByMovie.computeIfAbsent(showtime.getMovieId(), k -> new ArrayList<>()).add(showtime);
+        }
+
+        // 构建响应
+        ShowtimeGroupedVO vo = new ShowtimeGroupedVO();
+        if (cinema != null) {
+            ShowtimeGroupedVO.CinemaBrief cinemaBrief = new ShowtimeGroupedVO.CinemaBrief();
+            cinemaBrief.setId(cinema.getId());
+            cinemaBrief.setName(cinema.getName());
+            cinemaBrief.setAddress(cinema.getAddress());
+            cinemaBrief.setServices(JSONUtil.toList(cinema.getServices(), String.class));
+            vo.setCinema(cinemaBrief);
+        }
+
+        List<ShowtimeGroupedVO.MovieGroup> movies = new ArrayList<>();
+        for (Map.Entry<Long, List<Showtime>> entry : groupedByMovie.entrySet()) {
+            Movie movie = movieMapper.selectById(entry.getKey());
+            if (movie == null) continue;
+
+            ShowtimeGroupedVO.MovieGroup group = new ShowtimeGroupedVO.MovieGroup();
+            group.setId(movie.getId());
+            group.setName(movie.getName());
+            group.setPoster(movie.getPoster());
+            group.setDuration(movie.getDuration());
+
+            List<ShowtimeGroupedVO.ShowtimeItem> items = new ArrayList<>();
+            for (Showtime showtime : entry.getValue()) {
+                ShowtimeGroupedVO.ShowtimeItem item = new ShowtimeGroupedVO.ShowtimeItem();
+                item.setId(showtime.getId());
+                item.setStartAt(showtime.getStartAt());
+                item.setEndAt(showtime.getEndAt());
+                item.setLanguage(showtime.getLanguage());
+                item.setBasePrice(showtime.getBasePrice());
+
+                Hall hall = hallMapper.selectById(showtime.getHallId());
+                if (hall != null) {
+                    item.setHallName(hall.getName());
+                    item.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
+                }
+
+                // 统计剩余座位
+                List<ShowtimeSeat> seats = showtimeSeatMapper.selectList(
+                        new LambdaQueryWrapper<ShowtimeSeat>()
+                                .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
+                long remaining = seats.stream()
+                        .filter(s -> s.getStatus() == null || s.getStatus() == INVENTORY_AVAILABLE || s.getStatus() == INVENTORY_COUPLE)
+                        .count();
+                item.setRemainingSeats((int) remaining);
+                item.setTotalSeats(seats.size());
+                item.setStatus(showtime.getStatus() != null ? showtime.getStatus().getDesc() : null);
+
+                items.add(item);
+            }
+            group.setShowtimes(items);
+            movies.add(group);
+        }
+
+        vo.setMovies(movies);
+        return vo;
     }
 
     /**

@@ -6,6 +6,7 @@ import com.szml.movieticket.dto.ShowtimeStatusDTO;
 import com.szml.movieticket.dto.ShowtimeUpdateDTO;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.dto.ShowtimeSeatStatusDTO;
+import com.szml.movieticket.vo.ShowtimeGroupedVO;
 import com.szml.movieticket.vo.ShowtimePageVO;
 import com.szml.movieticket.vo.ShowtimeSeatStatusVO;
 import com.szml.movieticket.vo.ShowtimeSeatLayoutVO;
@@ -50,4 +51,9 @@ public interface ShowtimeService extends IService<Showtime> {
 
     /** 查询场次座位库存布局。 */
     ShowtimeSeatLayoutVO getSeatLayout(Long showtimeId);
+
+    /**
+     * C端场次列表查询（按影片分组，含影院信息、剩余座位）。
+     */
+    ShowtimeGroupedVO listShowtimesForUser(Long movieId, Long cinemaId, String date, String hallType);
 }
