@@ -63,7 +63,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final PaymentMapper paymentMapper;
-    private final com.szml.movieticket.mapper.TicketMapper ticketMapper;
+    private final TicketMapper ticketMapper;
     private final SeatLockLogMapper seatLockLogMapper;
     private final ShowtimeMapper showtimeMapper;
     private final ShowtimeSeatMapper showtimeSeatMapper;
@@ -221,14 +221,13 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         if (!order.getUserId().equals(userId)) {
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
         }
+
+        // 幂等：已支付/已出票的订单直接返回已有结果
         if ("PAID".equals(order.getStatus()) || "TICKETED".equals(order.getStatus())) {
-            Payment existing = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
-                    .eq(Payment::getOrderId, orderId)
-                    .eq(Payment::getIdempotencyKey, idempotencyKey));
-            if (existing != null) {
-                throw new OrderException(ErrorCode.PAYMENT_IDEMPOTENT_REPLAY);
-            }
+            log.info("订单已支付，返回已有结果, orderId: {}", orderId);
+            return buildPaidResult(order);
         }
+
         if (!"PAYMENT_PENDING".equals(order.getStatus())) {
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
@@ -261,7 +260,11 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         }
 
         // 出票
-        List<PayResultVO.TicketItem> ticketItems = new ArrayList<>();
+        Showtime payShowtime = showtimeMapper.selectById(order.getShowtimeId());
+        Movie payMovie = payShowtime != null ? movieMapper.selectById(payShowtime.getMovieId()) : null;
+        Hall payHall = payShowtime != null ? hallMapper.selectById(payShowtime.getHallId()) : null;
+        Cinema payCinema = payHall != null ? cinemaMapper.selectById(payHall.getCinemaId()) : null;
+
         for (OrderItem item : items) {
             ShowtimeSeat sts = showtimeSeatMapper.selectById(item.getSeatId());
             Seat physicalSeat = sts != null ? seatMapper.selectById(sts.getSeatId()) : null;
@@ -272,30 +275,17 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             ticket.setOrderItemId(item.getId());
             ticket.setTicketCode(ticketCode);
 
-            Showtime showtime = showtimeMapper.selectById(order.getShowtimeId());
-            Movie movie = showtime != null ? movieMapper.selectById(showtime.getMovieId()) : null;
-            Hall hall = showtime != null ? hallMapper.selectById(showtime.getHallId()) : null;
-            Cinema cinema = hall != null ? cinemaMapper.selectById(hall.getCinemaId()) : null;
-
-            // 组装 qr_content
             Map<String, String> qrMap = new LinkedHashMap<>();
-            qrMap.put("movie", movie != null ? movie.getName() : "");
-            qrMap.put("cinema", cinema != null ? cinema.getName() : "");
-            qrMap.put("hall", hall != null ? hall.getName() : "");
+            qrMap.put("movie", payMovie != null ? payMovie.getName() : "");
+            qrMap.put("cinema", payCinema != null ? payCinema.getName() : "");
+            qrMap.put("hall", payHall != null ? payHall.getName() : "");
             qrMap.put("row", physicalSeat != null ? String.valueOf(physicalSeat.getRowNo()) : "");
             qrMap.put("seat", physicalSeat != null ? String.valueOf(physicalSeat.getSeatNo()) : "");
-            qrMap.put("startAt", showtime != null ? showtime.getStartAt().toString() : "");
+            qrMap.put("startAt", payShowtime != null ? payShowtime.getStartAt().toString() : "");
             qrMap.put("ticketCode", ticketCode);
             ticket.setQrContent(new cn.hutool.json.JSONObject(qrMap).toString());
             ticket.setStatus(0);
             ticketMapper.insert(ticket);
-
-            PayResultVO.TicketItem ticketItem = new PayResultVO.TicketItem();
-            ticketItem.setTicketCode(ticketCode);
-            ticketItem.setSeat((physicalSeat != null ? physicalSeat.getRowNo() : "") + "排"
-                    + (physicalSeat != null ? physicalSeat.getSeatNo() : "") + "座");
-            ticketItem.setQrContent(ticket.getQrContent());
-            ticketItems.add(ticketItem);
         }
 
         // 订单 → TICKETED
@@ -303,10 +293,34 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         orderMapper.updateById(order);
 
         log.info("支付成功, userId: {}, orderId: {}, idempotencyKey: {}", userId, orderId, idempotencyKey);
+        return buildPaidResult(order);
+    }
+
+    /**
+     * 构建已支付/已出票订单的结果 VO（幂等返回用）。
+     */
+    private PayResultVO buildPaidResult(TicketOrder order) {
+        List<PayResultVO.TicketItem> ticketItems = ticketMapper.selectList(
+                        new LambdaQueryWrapper<Ticket>().eq(Ticket::getOrderId, order.getId()))
+                .stream().map(ticket -> {
+                    PayResultVO.TicketItem item = new PayResultVO.TicketItem();
+                    item.setTicketCode(ticket.getTicketCode());
+                    item.setQrContent(ticket.getQrContent());
+                    OrderItem oi = orderItemMapper.selectById(ticket.getOrderItemId());
+                    if (oi != null) {
+                        ShowtimeSeat sts = showtimeSeatMapper.selectById(oi.getSeatId());
+                        if (sts != null) {
+                            Seat physicalSeat = seatMapper.selectById(sts.getSeatId());
+                            item.setSeat((physicalSeat != null ? physicalSeat.getRowNo() : "") + "排"
+                                    + (physicalSeat != null ? physicalSeat.getSeatNo() : "") + "座");
+                        }
+                    }
+                    return item;
+                }).toList();
 
         PayResultVO result = new PayResultVO();
-        result.setOrderId(orderId);
-        result.setStatus("TICKETED");
+        result.setOrderId(order.getId());
+        result.setStatus(order.getStatus());
         result.setPaidAmount(yuan(order.getAmount()));
         result.setTickets(ticketItems);
         return result;

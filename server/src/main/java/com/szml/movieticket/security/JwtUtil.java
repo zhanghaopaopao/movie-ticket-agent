@@ -21,7 +21,8 @@ public class
 JwtUtil {
 
     private static final String ISSUER = "movie-ticket-agent";
-    private static final long EXPIRATION_MS = 30 * 60 * 1000L;
+    //TODO 测试时时间先增长
+    private static final long EXPIRATION_MS = 300 * 60 * 1000L;
 
     private final SecretKey secretKey;
 
