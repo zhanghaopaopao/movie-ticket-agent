@@ -27,6 +27,6 @@ public class RegisterDTO {
     @NotBlank(message = "验证码不能为空")
     private String code;
 
-    @AssertTrue(message = "必须同意用户协议")
-    private Boolean agreeAgreement;
+//    @AssertTrue(message = "必须同意用户协议")
+//    private Boolean agreeAgreement;
 }

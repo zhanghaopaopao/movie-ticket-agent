@@ -149,11 +149,12 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
     @Override
     public void register(String phone, String email, String password, String code) {
         String redisKey = REDIS_KEY_PREFIX + email + ":0";
-        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
-        if (storedHash == null || !storedHash.equals(sha256(code))) {
+        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);//从redis中获取验证码
+        if (storedHash == null || !storedHash.equals(sha256(code))) {//解析验证码
             throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
         }
 
+        // 检查手机号、邮箱是否已存在
         long phoneCount = count(new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
         if (phoneCount > 0) {
             throw new BusinessException(ErrorCode.USER_PHONE_EXISTS);
