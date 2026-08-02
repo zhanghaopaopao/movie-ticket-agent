@@ -76,6 +76,10 @@ public enum ErrorCode {
     // ---- 订单（6000-6999）----
 
     ORDER_NOT_FOUND(6000, "订单不存在"),
+    ORDER_EXPIRED(6001, "订单已超时，请重新选座"),
+    ORDER_STATUS_INVALID(6002, "当前订单状态不允许此操作"),
+    SEAT_LOCK_CONFLICT(6003, "座位已被锁定或售出"),
+    PAYMENT_IDEMPOTENT_REPLAY(6004, "请勿重复支付"),
 
     // ---- 草稿（7000-7999）----
 
