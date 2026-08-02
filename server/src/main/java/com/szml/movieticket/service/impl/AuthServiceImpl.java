@@ -18,6 +18,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -136,9 +138,10 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         // 生成验证码
         String code = generateCode();
+        String codeHash = sha256(code);
 
-        // 存入 Redis，10min 有效期
-        stringRedisTemplate.opsForValue().set(redisKey, code, Duration.ofSeconds(CODE_TTL_SECONDS));
+        // 存入 Redis（只存哈希摘要，10min 有效期）
+        stringRedisTemplate.opsForValue().set(redisKey, codeHash, Duration.ofSeconds(CODE_TTL_SECONDS));
 
         // 开发环境打印验证码到日志
         log.info("========== 验证码 ==========");
@@ -150,10 +153,10 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public void register(String phone, String email, String password, String code) {
-        // 校验验证码
+        // 校验验证码（与 Redis 中的 SHA-256 摘要比对）
         String redisKey = REDIS_KEY_PREFIX + email + ":0";
-        String storedCode = stringRedisTemplate.opsForValue().get(redisKey);
-        if (storedCode == null || !storedCode.equals(code)) {
+        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
+        if (storedHash == null || !storedHash.equals(sha256(code))) {
             throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
         }
 
@@ -186,10 +189,10 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public void resetPassword(String email, String code, String newPassword) {
-        // 校验验证码
+        // 校验验证码（与 Redis 中的 SHA-256 摘要比对）
         String redisKey = REDIS_KEY_PREFIX + email + ":1";
-        String storedCode = stringRedisTemplate.opsForValue().get(redisKey);
-        if (storedCode == null || !storedCode.equals(code)) {
+        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
+        if (storedHash == null || !storedHash.equals(sha256(code))) {
             throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
         }
 
@@ -219,5 +222,22 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             sb.append(random.nextInt(10));
         }
         return sb.toString();
+    }
+
+    /**
+     * SHA-256 摘要（验证码存储）。
+     */
+    private static String sha256(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 }
