@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.szml.movieticket.mapper.ShowtimeSeatMapper">
+
+    <!-- 按 showtimeId + seatIds 行级锁查询，seatId ASC 排序防死锁 -->
+    <select id="selectForUpdate" resultType="com.szml.movieticket.entity.ShowtimeSeat">
+        SELECT *
+        FROM showtime_seat
+        WHERE showtime_id = #{showtimeId}
+          AND id IN
+        <foreach collection="seatIds" item="sid" open="(" separator="," close=")">
+            #{sid}
+        </foreach>
+        ORDER BY seat_id ASC
+        FOR UPDATE
+    </select>
+
+</mapper>

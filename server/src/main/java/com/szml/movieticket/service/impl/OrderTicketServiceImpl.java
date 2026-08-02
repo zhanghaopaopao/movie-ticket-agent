@@ -10,15 +10,14 @@ import com.szml.movieticket.service.OrderTicketService;
 import com.szml.movieticket.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -38,6 +37,28 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     private static final int LOCK_SECONDS = 900;
     private static final String REDIS_LOCK_PREFIX = "lock:showtime:";
 
+    /**
+     * Redis Lua 脚本：批量原子占座。
+     * KEYS[] = 要锁定的 Redis key 列表
+     * ARGV[1] = userId
+     * ARGV[2] = TTL 秒数
+     * 返回：{1} 表示全部占座成功；{0, 冲突key} 表示存在冲突
+     */
+    private static final String LOCK_LUA_SCRIPT = """
+            local userId = ARGV[1]
+            local ttl = tonumber(ARGV[2])
+            for i = 1, #KEYS do
+                local ok = redis.call('SET', KEYS[i], userId, 'NX', 'EX', ttl)
+                if not ok then
+                    for j = 1, i - 1 do
+                        redis.call('DEL', KEYS[j])
+                    end
+                    return {0, KEYS[i]}
+                end
+            end
+            return {1}
+            """;
+
     private final StringRedisTemplate stringRedisTemplate;
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -53,7 +74,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     private final PurchaseDraftMapper draftMapper;
 
     @Override
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public LockResultVO lockSeats(Long userId, Long showtimeId, List<Long> seatIds, Integer draftVersion) {
         // 校验场次存在且在售
         Showtime showtime = showtimeMapper.selectById(showtimeId);
@@ -69,29 +90,35 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             throw new OrderException(ErrorCode.DRAFT_VERSION_CONFLICT);
         }
 
-        // 校验座位状态（MySQL 查 seat 实际状态）
-        List<ShowtimeSeat> seatInventories = showtimeSeatMapper.selectBatchIds(seatIds);
-        if (seatInventories.size() != seatIds.size()) {
+        // 第1层：Redis Lua 原子占座（批量 SETNX，任一冲突则全部回退）
+        List<String> redisKeys = seatIds.stream()
+                .map(sid -> REDIS_LOCK_PREFIX + showtimeId + ":seat:" + sid)
+                .toList();
+        DefaultRedisScript<List> script = new DefaultRedisScript<>(LOCK_LUA_SCRIPT, List.class);
+        List<Object> redisResult = stringRedisTemplate.execute(
+                script, redisKeys, String.valueOf(userId), String.valueOf(LOCK_SECONDS));
+        if (redisResult == null || redisResult.isEmpty() || !redisResult.get(0).equals(1L)) {
+            log.warn("Redis占座冲突, 用户ID: {}, 场次ID: {}, 冲突Key: {}", userId, showtimeId,
+                    redisResult != null && redisResult.size() > 1 ? redisResult.get(1) : "unknown");
+            throw new OrderException(ErrorCode.SEAT_LOCK_CONFLICT);
+        }
+        log.debug("Redis原子占座成功, 用户ID: {}, 场次ID: {}, 座位数: {}", userId, showtimeId, seatIds.size());
+
+        // 第2层：MySQL SELECT ... FOR UPDATE（按 seatId ASC 排序，防死锁 + 持久化兜底）
+        List<ShowtimeSeat> locked = showtimeSeatMapper.selectForUpdate(showtimeId, seatIds);
+        if (locked.size() != seatIds.size()) {
+            // Redis 占座成功但 MySQL 记录不存在 → 释放 Redis 并抛异常
+            redisKeys.forEach(k -> stringRedisTemplate.delete(k));
             throw new OrderException(ErrorCode.SHOWTIME_SEAT_NOT_FOUND);
         }
-        // 确保座位属于该场次
-        for (ShowtimeSeat inventory : seatInventories) {
-            if (!inventory.getShowtimeId().equals(showtimeId)) {
-                throw new OrderException(ErrorCode.SHOWTIME_SEAT_NOT_FOUND);
-            }
-        }
-
-        // TODO: 后续接入 Redis Lua 原子占座，当前使用 MySQL SELECT ... FOR UPDATE
-        // 校验全部 AVAILABLE 或 COUPLE
-        List<ShowtimeSeat> locked = showtimeSeatMapper.selectList(
-                new LambdaQueryWrapper<ShowtimeSeat>()
-                        .in(ShowtimeSeat::getId, seatIds)
-                        .last("FOR UPDATE"));
         for (ShowtimeSeat seat : locked) {
             int status = seat.getStatus() != null ? seat.getStatus() : 0;
             if (status == 1 || status == 2) {
+                // 极端情况：Redis TTL 刚好过期 + 被另一个事务抢先写入
+                redisKeys.forEach(k -> stringRedisTemplate.delete(k));
                 throw new OrderException(ErrorCode.SEAT_LOCK_CONFLICT);
             }
+            seat.setVersion(seat.getVersion() + 1);
         }
 
         // 锁定座位
@@ -100,7 +127,6 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             seat.setStatus(1);
             seat.setLockOwner(userId);
             seat.setLockExpiresAt(expiresAt);
-            seat.setVersion(seat.getVersion() + 1);
             showtimeSeatMapper.updateById(seat);
         }
 
