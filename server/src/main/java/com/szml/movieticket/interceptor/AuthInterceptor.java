@@ -5,21 +5,20 @@ import com.szml.movieticket.result.Result;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.UserRole;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.szml.movieticket.security.JwtUtil;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.time.Duration;
+
 /**
- * JWT 认证拦截器，从 Header 提取 Token 解析后写入 UserContext。
- * /api/auth/** 路径：有 token 则解析，无则放行。
- * /api/admin/**, /api/v1/** 路径：无 token 返回 401。
+ * 认证拦截器，从 Header 提取 Token，通过 Redis 校验并滑动续期。
+ * 排除路径在 WebMvcConfig 中配置。
  *
  * @author zhanghao
  * @since 2026-07-31
@@ -31,40 +30,40 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private static final String AUTH_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String AUTH_PATH = "/api/auth";
+    private static final String REDIS_AUTH_PREFIX = "auth:";
+    private static final int TOKEN_TTL_MINUTES = 30;
 
-    private final JwtUtil jwtUtil;
+    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
                              Object handler) throws Exception {
         String token = extractToken(request);
-
-        // /api/auth/** 不强制要求 token
         if (!StringUtils.hasText(token)) {
-            if (request.getRequestURI().startsWith(AUTH_PATH)) {
-                return true;
-            }
             writeError(response, ErrorCode.UNAUTHORIZED);
             return false;
         }
 
-        try {
-            Claims claims = jwtUtil.parseToken(token);
-            Long userId = jwtUtil.getUserId(claims);
-            UserRole role = jwtUtil.getRole(claims);
-            UserContext.set(userId, role);
-            log.debug("JWT 认证成功, userId: {}, role: {}", userId, role);
-            return true;
-        } catch (JwtException e) {
-            log.debug("JWT 解析失败: {}", e.getMessage());
-            if (request.getRequestURI().startsWith(AUTH_PATH)) {
-                return true;
-            }
+        String redisKey = REDIS_AUTH_PREFIX + token;
+        String value = stringRedisTemplate.opsForValue().get(redisKey);
+        if (value == null) {
+            log.debug("Token 无效或已过期");
             writeError(response, ErrorCode.UNAUTHORIZED);
             return false;
         }
+
+        // 解析 userId:role
+        String[] parts = value.split(":");
+        Long userId = Long.parseLong(parts[0]);
+        UserRole role = UserRole.fromCode(Integer.parseInt(parts[1]));
+        UserContext.set(userId, role);
+
+        // 滑动续期：每次请求刷新 Redis TTL
+        stringRedisTemplate.expire(redisKey, Duration.ofMinutes(TOKEN_TTL_MINUTES));
+
+        log.debug("认证成功, userId: {}, role: {}", userId, role);
+        return true;
     }
 
     @Override

@@ -10,7 +10,6 @@ import com.szml.movieticket.enums.UserRole;
 import com.szml.movieticket.enums.UserStatus;
 import com.szml.movieticket.vo.LoginVO;
 import com.szml.movieticket.mapper.UserMapper;
-import com.szml.movieticket.security.JwtUtil;
 import com.szml.movieticket.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +23,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 认证服务实现类。
@@ -36,16 +36,16 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements AuthService {
 
-    private static final int TOKEN_EXPIRES_IN = 1800;
+    private static final int TOKEN_TTL_MINUTES = 30;
     private static final int CODE_LENGTH = 6;
     private static final long CODE_TTL_SECONDS = 600;
     private static final long CODE_RATE_LIMIT_SECONDS = 60;
     private static final String REDIS_KEY_PREFIX = "email_code:";
     private static final String REDIS_LOGIN_FAIL_PREFIX = "login_fail:";
+    private static final String REDIS_AUTH_PREFIX = "auth:";
     private static final int MAX_LOGIN_FAIL_COUNT = 5;
     private static final int LOCK_MINUTES = 15;
 
-    private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -70,32 +70,26 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         }
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.warn("登录失败，账号已禁用, userId: {}", user.getId());
-            incrementFailCount(failKey);
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_DISABLED);
-        }
-        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(java.time.LocalDateTime.now())) {
-            log.warn("登录失败，账号已锁定(DB), userId: {}", user.getId());
-            throw new AuthException(ErrorCode.AUTH_ACCOUNT_LOCKED);
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             log.warn("登录失败，密码错误, userId: {}", user.getId());
             int newFailCount = incrementFailCount(failKey);
             if (newFailCount >= MAX_LOGIN_FAIL_COUNT) {
-                user.setLockedUntil(java.time.LocalDateTime.now().plusMinutes(LOCK_MINUTES));
-                updateById(user);
-                log.warn("登录失败已达{}次，账号已锁定, userId: {}, lockedUntil: {}", MAX_LOGIN_FAIL_COUNT, user.getId(), user.getLockedUntil());
+                log.warn("登录失败已达{}次，账号已锁定(Redis), phone: {}", MAX_LOGIN_FAIL_COUNT, phone);
             }
             throw new AuthException(ErrorCode.AUTH_WRONG_PASSWORD);
         }
 
-        // 登录成功：清除失败计数 + 清空 lockedUntil
+        // 登录成功：清除失败计数
         stringRedisTemplate.delete(failKey);
-        if (user.getLockedUntil() != null) {
-            user.setLockedUntil(null);
-            updateById(user);
-        }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getRole());
+        // 生成会话令牌，存入 Redis（每次请求刷新 TTL）
+        String token = UUID.randomUUID().toString().replace("-", "");
+        stringRedisTemplate.opsForValue().set(
+                REDIS_AUTH_PREFIX + token,
+                user.getId() + ":" + user.getRole().getCode(),
+                Duration.ofMinutes(TOKEN_TTL_MINUTES));
 
         Map<String, Object> userInfo = new LinkedHashMap<>();
         userInfo.put("id", user.getId());
@@ -105,27 +99,16 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         LoginVO loginVO = new LoginVO();
         loginVO.setToken(token);
-        loginVO.setExpiresIn(TOKEN_EXPIRES_IN);
         loginVO.setUser(userInfo);
 
         log.info("用户登录成功, userId: {}, role: {}", user.getId(), user.getRole());
         return loginVO;
     }
 
-    /**
-     * 递增登录失败计数（Redis 计数器，TTL = 锁定时间）。
-     */
-    private int incrementFailCount(String failKey) {
-        Long newCount = stringRedisTemplate.opsForValue().increment(failKey);
-        stringRedisTemplate.expire(failKey, Duration.ofMinutes(LOCK_MINUTES));
-        return newCount != null ? newCount.intValue() : 0;
-    }
-
     @Override
     public void sendEmailCode(String email, Integer purpose) {
         String redisKey = REDIS_KEY_PREFIX + email + ":" + purpose;
 
-        // 60s 限流
         String existing = stringRedisTemplate.opsForValue().get(redisKey);
         if (existing != null) {
             Long remaining = stringRedisTemplate.getExpire(redisKey);
@@ -136,43 +119,33 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             }
         }
 
-        // 生成验证码
         String code = generateCode();
         String codeHash = sha256(code);
-
-        // 存入 Redis（只存哈希摘要，10min 有效期）
         stringRedisTemplate.opsForValue().set(redisKey, codeHash, Duration.ofSeconds(CODE_TTL_SECONDS));
 
-        // 开发环境打印验证码到日志
         log.info("========== 验证码 ==========");
         log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purpose == 0 ? "注册" : "找回密码", code);
         log.info("============================");
-
-        // TODO: 生产环境通过 SMTP 发送邮件
     }
 
     @Override
     public void register(String phone, String email, String password, String code) {
-        // 校验验证码（与 Redis 中的 SHA-256 摘要比对）
         String redisKey = REDIS_KEY_PREFIX + email + ":0";
         String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
         if (storedHash == null || !storedHash.equals(sha256(code))) {
             throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
         }
 
-        // 手机号唯一性
         long phoneCount = count(new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
         if (phoneCount > 0) {
             throw new BusinessException(ErrorCode.USER_PHONE_EXISTS);
         }
 
-        // 邮箱唯一性
         long emailCount = count(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
         if (emailCount > 0) {
             throw new BusinessException(ErrorCode.USER_EMAIL_EXISTS);
         }
 
-        // 创建用户，role 固定 USER
         User user = new User();
         user.setPhone(phone);
         user.setEmail(email);
@@ -181,7 +154,6 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         user.setStatus(UserStatus.ACTIVE);
         save(user);
 
-        // 删除已使用的验证码
         stringRedisTemplate.delete(redisKey);
 
         log.info("用户注册成功, userId: {}, email: {}", user.getId(), email);
@@ -189,32 +161,31 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public void resetPassword(String email, String code, String newPassword) {
-        // 校验验证码（与 Redis 中的 SHA-256 摘要比对）
         String redisKey = REDIS_KEY_PREFIX + email + ":1";
         String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
         if (storedHash == null || !storedHash.equals(sha256(code))) {
             throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
         }
 
-        // 根据邮箱查用户
         User user = getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
         if (user == null) {
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_NOT_FOUND);
         }
 
-        // 更新密码
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         updateById(user);
 
-        // 删除已使用的验证码
         stringRedisTemplate.delete(redisKey);
 
         log.info("密码重置成功, userId: {}, email: {}", user.getId(), email);
     }
 
-    /**
-     * 生成 6 位数字验证码。
-     */
+    private int incrementFailCount(String failKey) {
+        Long newCount = stringRedisTemplate.opsForValue().increment(failKey);
+        stringRedisTemplate.expire(failKey, Duration.ofMinutes(LOCK_MINUTES));
+        return newCount != null ? newCount.intValue() : 0;
+    }
+
     private String generateCode() {
         SecureRandom random = new SecureRandom();
         StringBuilder sb = new StringBuilder();
@@ -224,9 +195,6 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         return sb.toString();
     }
 
-    /**
-     * SHA-256 摘要（验证码存储）。
-     */
     private static String sha256(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

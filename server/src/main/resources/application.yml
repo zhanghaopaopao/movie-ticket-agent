@@ -7,9 +7,6 @@ spring:
 server:
   port: 8080
 
-jwt:
-  secret: ${JWT_SECRET:movie-ticket-agent-dev-secret-key-256-bit-minimum}
-
 cos:
   client:
     accessKey: xxx
