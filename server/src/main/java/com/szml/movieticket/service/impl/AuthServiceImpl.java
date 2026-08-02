@@ -188,7 +188,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         User user = getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
         if (user == null) {
-            throw new AuthException(ErrorCode.AUTH_ACCOUNT_NOT_FOUND);
+            throw new AuthException(ErrorCode.USER_EMAIL_NOT_FOUND);
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
