@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import com.szml.movieticket.util.AmountUtil;import com.szml.movieticket.util.OrderStatusUtil;
 
 /**
  * 用户个人中心服务实现类。
@@ -57,7 +58,7 @@ public class UserProfileServiceImpl implements UserProfileService {
         stats.setTotalOrders(orderMapper.selectCount(
                 new LambdaQueryWrapper<TicketOrder>().eq(TicketOrder::getUserId, userId)));
         long totalCents = paidOrders.stream().mapToLong(o -> o.getAmount() != null ? o.getAmount() : 0).sum();
-        stats.setTotalSpent(yuan(totalCents));
+        stats.setTotalSpent(AmountUtil.yuan(totalCents));
         vo.setStats(stats);
 
         // 偏好
@@ -68,7 +69,7 @@ public class UserProfileServiceImpl implements UserProfileService {
             preferenceVO.setDistrict(preference.getDistrict());
             preferenceVO.setHallType(preference.getHallType());
             preferenceVO.setBudgetRaw(preference.getBudget());
-            preferenceVO.setBudget(preference.getBudget() != null ? yuan(preference.getBudget()) : null);
+            preferenceVO.setBudget(preference.getBudget() != null ? AmountUtil.yuan(preference.getBudget()) : null);
             preferenceVO.setSeatZone(preference.getSeatZone());
             vo.setPreference(preferenceVO);
         }
@@ -99,7 +100,7 @@ public class UserProfileServiceImpl implements UserProfileService {
         preferenceVO.setDistrict(preference.getDistrict());
         preferenceVO.setHallType(preference.getHallType());
         preferenceVO.setBudgetRaw(preference.getBudget());
-        preferenceVO.setBudget(preference.getBudget() != null ? yuan(preference.getBudget()) : null);
+        preferenceVO.setBudget(preference.getBudget() != null ? AmountUtil.yuan(preference.getBudget()) : null);
         preferenceVO.setSeatZone(preference.getSeatZone());
         return preferenceVO;
     }
@@ -121,7 +122,4 @@ public class UserProfileServiceImpl implements UserProfileService {
         log.info("修改密码成功, userId: {}", userId);
     }
 
-    private static double yuan(long cents) {
-        return BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).doubleValue();
-    }
 }

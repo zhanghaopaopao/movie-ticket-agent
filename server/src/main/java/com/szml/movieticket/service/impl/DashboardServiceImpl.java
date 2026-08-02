@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.szml.movieticket.util.AmountUtil;import com.szml.movieticket.util.OrderStatusUtil;
 
 /**
  * 数据看板服务实现类。
@@ -73,7 +74,7 @@ public class DashboardServiceImpl implements DashboardService {
                         .lt(TicketOrder::getCreateTime, todayEnd)
                         .in(TicketOrder::getStatus, List.of("PAID", "TICKETED")));
         long revenueCents = paidOrders.stream().mapToLong(o -> o.getAmount() != null ? o.getAmount() : 0).sum();
-        stats.setRevenue(yuan(revenueCents));
+        stats.setRevenue(AmountUtil.yuan(revenueCents));
 
         // 转化率
         long totalOrders = stats.getOrderCount();
@@ -124,7 +125,7 @@ public class DashboardServiceImpl implements DashboardService {
                 return m;
             });
             stat.setOrderCount(stat.getOrderCount() + 1);
-            stat.setRevenue(stat.getRevenue() + yuan(order.getAmount() != null ? order.getAmount() : 0));
+            stat.setRevenue(stat.getRevenue() + AmountUtil.yuan(order.getAmount() != null ? order.getAmount() : 0));
         }
 
         // 按订单数降序取 Top 5
@@ -153,14 +154,11 @@ public class DashboardServiceImpl implements DashboardService {
             dailyVO.setDate(date.toString());
             dailyVO.setCount(dayOrders.size());
             long revenueCents = dayOrders.stream().mapToLong(o -> o.getAmount() != null ? o.getAmount() : 0).sum();
-            dailyVO.setRevenue(yuan(revenueCents));
+            dailyVO.setRevenue(AmountUtil.yuan(revenueCents));
             result.add(dailyVO);
         }
 
         return result;
     }
 
-    private static double yuan(long cents) {
-        return BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).doubleValue();
-    }
 }

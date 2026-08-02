@@ -21,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.szml.movieticket.util.AmountUtil;import com.szml.movieticket.util.OrderStatusUtil;
 
 /**
  * 订单服务实现类（B 端只读）。
@@ -134,9 +135,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         vo.setId(order.getId());
         vo.setOrderNo(order.getOrderNo());
         vo.setUserId(order.getUserId());
-        vo.setAmount(yuan(order.getAmount()));
+        vo.setAmount(AmountUtil.yuan(order.getAmount()));
         vo.setStatus(order.getStatus());
-        vo.setStatusDesc(statusDesc(order.getStatus()));
+        vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
         vo.setExpiresAt(order.getExpiresAt());
         vo.setCreateTime(order.getCreateTime());
         vo.setUpdateTime(order.getUpdateTime());
@@ -179,7 +180,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         List<OrderDetailVO.OrderItemVO> itemVOs = new ArrayList<>();
         for (OrderItem item : items) {
             OrderDetailVO.OrderItemVO itemVO = new OrderDetailVO.OrderItemVO();
-            itemVO.setUnitPrice(yuan(item.getUnitPrice()));
+            itemVO.setUnitPrice(AmountUtil.yuan(item.getUnitPrice()));
 
             ShowtimeSeat showtimeSeat = showtimeSeatMapper.selectById(item.getSeatId());
             if (showtimeSeat != null) {
@@ -209,7 +210,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         if (payment != null) {
             OrderDetailVO.PaymentInfoVO paymentVO = new OrderDetailVO.PaymentInfoVO();
             paymentVO.setStatus(payment.getStatus());
-            paymentVO.setAmount(yuan(payment.getAmount()));
+            paymentVO.setAmount(AmountUtil.yuan(payment.getAmount()));
             paymentVO.setIdempotencyKey(payment.getIdempotencyKey());
             paymentVO.setProcessedAt(payment.getProcessedAt());
             vo.setPayment(paymentVO);
@@ -261,9 +262,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         vo.setId(order.getId());
         vo.setOrderNo(order.getOrderNo());
         vo.setUserId(order.getUserId());
-        vo.setAmount(yuan(order.getAmount()));
+        vo.setAmount(AmountUtil.yuan(order.getAmount()));
         vo.setStatus(order.getStatus());
-        vo.setStatusDesc(statusDesc(order.getStatus()));
+        vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
         vo.setCreateTime(order.getCreateTime());
 
         // 用户邮箱
@@ -311,18 +312,4 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         return vo;
     }
 
-    private static Double yuan(int cents) {
-        return BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    private static String statusDesc(String status) {
-        return switch (status) {
-            case "PAYMENT_PENDING" -> "待支付";
-            case "PAID" -> "已支付";
-            case "TICKETED" -> "已出票";
-            case "CANCELLED" -> "已取消";
-            case "EXPIRED" -> "已过期";
-            default -> status;
-        };
-    }
 }

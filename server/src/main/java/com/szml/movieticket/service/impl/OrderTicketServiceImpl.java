@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.szml.movieticket.util.AmountUtil;import com.szml.movieticket.util.OrderStatusUtil;
 
 /**
  * C 端订单与支付服务实现类。
@@ -176,7 +177,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         LockResultVO result = new LockResultVO();
         result.setOrderId(order.getId());
         result.setOrderNo(orderNo);
-        result.setAmount(yuan(amount));
+        result.setAmount(AmountUtil.yuan(amount));
         result.setExpiresAt(expiresAt);
         result.setRemainingSeconds((long) LOCK_SECONDS);
 
@@ -203,7 +204,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             LockResultVO.SeatInfo si = new LockResultVO.SeatInfo();
             si.setRowNo(physicalSeat != null ? physicalSeat.getRowNo() : null);
             si.setSeatNo(physicalSeat != null ? physicalSeat.getSeatNo() : null);
-            si.setPrice(yuan(s.getPrice() != null ? s.getPrice() : showtime.getBasePrice()));
+            si.setPrice(AmountUtil.yuan(s.getPrice() != null ? s.getPrice() : showtime.getBasePrice()));
             seatInfos.add(si);
         }
         result.setSeats(seatInfos);
@@ -321,7 +322,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         PayResultVO result = new PayResultVO();
         result.setOrderId(order.getId());
         result.setStatus(order.getStatus());
-        result.setPaidAmount(yuan(order.getAmount()));
+        result.setPaidAmount(AmountUtil.yuan(order.getAmount()));
         result.setTickets(ticketItems);
         return result;
     }
@@ -389,9 +390,9 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             UserOrderVO vo = new UserOrderVO();
             vo.setId(order.getId());
             vo.setOrderNo(order.getOrderNo());
-            vo.setAmount(yuan(order.getAmount()));
+            vo.setAmount(AmountUtil.yuan(order.getAmount()));
             vo.setStatus(order.getStatus());
-            vo.setStatusDesc(statusDesc(order.getStatus()));
+            vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
             vo.setExpiresAt(order.getExpiresAt());
             vo.setCreateTime(order.getCreateTime());
 
@@ -443,9 +444,9 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         UserOrderDetailVO vo = new UserOrderDetailVO();
         vo.setId(order.getId());
         vo.setOrderNo(order.getOrderNo());
-        vo.setAmount(yuan(order.getAmount()));
+        vo.setAmount(AmountUtil.yuan(order.getAmount()));
         vo.setStatus(order.getStatus());
-        vo.setStatusDesc(statusDesc(order.getStatus()));
+        vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
         vo.setExpiresAt(order.getExpiresAt());
         vo.setCreateTime(order.getCreateTime());
 
@@ -480,7 +481,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         List<UserOrderDetailVO.OrderItemInfo> itemVOs = new ArrayList<>();
         for (OrderItem item : items) {
             UserOrderDetailVO.OrderItemInfo itemVO = new UserOrderDetailVO.OrderItemInfo();
-            itemVO.setUnitPrice(yuan(item.getUnitPrice()));
+            itemVO.setUnitPrice(AmountUtil.yuan(item.getUnitPrice()));
             ShowtimeSeat sts = showtimeSeatMapper.selectById(item.getSeatId());
             if (sts != null) {
                 Seat seat = seatMapper.selectById(sts.getSeatId());
@@ -505,7 +506,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         if (payment != null) {
             UserOrderDetailVO.PaymentInfo pi = new UserOrderDetailVO.PaymentInfo();
             pi.setStatus(payment.getStatus());
-            pi.setAmount(yuan(payment.getAmount()));
+            pi.setAmount(AmountUtil.yuan(payment.getAmount()));
             pi.setProcessedAt(payment.getProcessedAt());
             vo.setPayment(pi);
         }
@@ -544,18 +545,4 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         return timestamp + code;
     }
 
-    private static double yuan(int cents) {
-        return BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    private static String statusDesc(String status) {
-        return switch (status) {
-            case "PAYMENT_PENDING" -> "待支付";
-            case "PAID" -> "已支付";
-            case "TICKETED" -> "已出票";
-            case "CANCELLED" -> "已取消";
-            case "EXPIRED" -> "已过期";
-            default -> status;
-        };
-    }
 }
