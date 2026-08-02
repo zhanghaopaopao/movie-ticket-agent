@@ -36,7 +36,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
     private final UserMapper userMapper;
     private final OrderItemMapper orderItemMapper;
     private final PaymentMapper paymentMapper;
-    private final com.szml.movieticket.mapper.TicketMapper ticketMapper;
+    private final TicketMapper ticketMapper;
     private final SeatLockLogMapper seatLockLogMapper;
     private final ShowtimeMapper showtimeMapper;
     private final MovieMapper movieMapper;

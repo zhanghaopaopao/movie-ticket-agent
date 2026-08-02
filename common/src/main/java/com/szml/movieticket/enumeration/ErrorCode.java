@@ -90,7 +90,11 @@ public enum ErrorCode {
 
     FILE_UPLOAD_ERROR(8000, "文件上传失败"),
     FILE_FORMAT_INVALID(8001, "仅支持 jpg/png/webp 格式的图片文件"),
-    FILE_SIZE_EXCEED(8002, "文件大小不能超过 5MB");
+    FILE_SIZE_EXCEED(8002, "文件大小不能超过 5MB"),
+
+    // ---- 用户（9000-9999）----
+
+    USER_OLD_PASSWORD_WRONG(9000, "当前密码不正确");
 
     private final int code;
     private final String message;
