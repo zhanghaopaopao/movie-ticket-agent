@@ -3,6 +3,7 @@ package com.szml.movieticket.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.szml.movieticket.entity.User;
 import com.szml.movieticket.vo.LoginVO;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 认证服务接口。
@@ -43,4 +44,11 @@ public interface AuthService extends IService<User> {
      * @param newPassword 新密码
      */
     void resetPassword(String email, String code, String newPassword);
+
+    /**
+     * 退出登录，删除 Redis 会话令牌。
+     *
+     * @param request request
+     */
+    void logout(HttpServletRequest request);
 }

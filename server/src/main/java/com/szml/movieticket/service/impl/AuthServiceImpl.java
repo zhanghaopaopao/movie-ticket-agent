@@ -11,6 +11,7 @@ import com.szml.movieticket.enums.UserStatus;
 import com.szml.movieticket.vo.LoginVO;
 import com.szml.movieticket.mapper.UserMapper;
 import com.szml.movieticket.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -115,8 +116,8 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         String existing = stringRedisTemplate.opsForValue().get(redisKey);
         if (existing != null) {
-            Long remaining = stringRedisTemplate.getExpire(redisKey);
-            long elapsed = CODE_TTL_SECONDS - (remaining != null ? remaining : 0);
+            Long remaining = stringRedisTemplate.getExpire(redisKey);//获取指定key的过期时间
+            long elapsed = CODE_TTL_SECONDS - remaining;
             if (elapsed < CODE_RATE_LIMIT_SECONDS) {
                 log.warn("验证码发送频率超限, email: {}, purpose: {}", email, purpose);
                 throw new BusinessException(ErrorCode.EMAIL_CODE_RATE_LIMIT);
@@ -195,6 +196,16 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         stringRedisTemplate.delete(redisKey);
 
         log.info("密码重置成功, userId: {}, email: {}", user.getId(), email);
+    }
+
+    @Override
+    public void logout(HttpServletRequest request) {
+        String token = request.getHeader("Authorization");
+        if (token != null && token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        stringRedisTemplate.delete(REDIS_AUTH_PREFIX + token);
+        log.info("用户退出登录成功");
     }
 
     private int incrementFailCount(String failKey) {

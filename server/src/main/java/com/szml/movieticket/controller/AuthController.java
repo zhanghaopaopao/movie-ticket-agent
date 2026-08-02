@@ -7,9 +7,11 @@ import com.szml.movieticket.dto.ResetPasswordDTO;
 import com.szml.movieticket.dto.SendCodeDTO;
 import com.szml.movieticket.vo.LoginVO;
 import com.szml.movieticket.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -68,6 +70,16 @@ public class AuthController {
         log.info("找回密码, 邮箱: {}", resetPasswordDTO.getEmail());
         authService.resetPassword(resetPasswordDTO.getEmail(), resetPasswordDTO.getCode(),
                 resetPasswordDTO.getNewPassword());
+        return Result.success();
+    }
+
+    /**
+     * 退出登录。
+     */
+    @PostMapping("/logout")
+    public Result<Void> logout(HttpServletRequest request) {
+        log.info("退出登录");
+        authService.logout(request);
         return Result.success();
     }
 }
