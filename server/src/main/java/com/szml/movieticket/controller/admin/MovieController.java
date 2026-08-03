@@ -31,7 +31,7 @@ public class MovieController {
      */
     @GetMapping
     public Result<MoviePageVO> list(@RequestParam(defaultValue = "1") int page,
-                                     @RequestParam(defaultValue = "20") int size,
+                                     @RequestParam(defaultValue = "10") int size,
                                      @RequestParam(required = false) String keyword,
                                      @RequestParam(required = false) String status) {
         log.info("B端查询影片列表, 页码: {}, 每页条数: {}, 搜索关键词: {}, 上映状态: {}", page, size, keyword, status);

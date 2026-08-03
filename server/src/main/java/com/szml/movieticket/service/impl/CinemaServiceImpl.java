@@ -45,7 +45,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
 
     @Override
     public CinemaPageVO pageCinemas(int page, int size, String keyword, String district, Integer status) {
-        LambdaQueryWrapper<Cinema> wrapper = buildQueryWrapper(keyword, district, status);
+        LambdaQueryWrapper<Cinema> wrapper = buildQueryWrapper(keyword, district, status);//根据相应条件构建查询条件
         wrapper.orderByDesc(Cinema::getCreateTime);
 
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
@@ -174,7 +174,6 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
         List<CinemaVO> records = pageResult.getRecords().stream().map(cinema -> {
             CinemaVO vo = toVO(cinema);
-            vo.setHallTypes(getHallTypes(cinema.getId()));
             vo.setMinPrice(getMinPrice(cinema.getId()));
             return vo;
         }).collect(Collectors.toList());
@@ -222,7 +221,6 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         List<CinemaVO> records = pageList.stream().map(cinema -> {
             CinemaVO vo = toVO(cinema);
             vo.setDistance(haversine(lat, lng, cinema.getLatitude().doubleValue(), cinema.getLongitude().doubleValue()));
-            vo.setHallTypes(getHallTypes(cinema.getId()));
             vo.setMinPrice(getMinPrice(cinema.getId()));
             return vo;
         }).collect(Collectors.toList());
@@ -255,19 +253,29 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         vo.setStatus(cinema.getStatus() != null ? cinema.getStatus().getCode() : null);
         vo.setStatusDesc(cinema.getStatus() != null ? cinema.getStatus().getDesc() : null);
         vo.setServices(JSONUtil.toList(cinema.getServices(), String.class));
-        vo.setHallCount(0);
-        vo.setShowtimeCount(0);
-        return vo;
-    }
 
-    private List<String> getHallTypes(Long cinemaId) {
+        // 一次查询影厅，同时计算影厅数量、厅型列表、在售场次数
         List<Hall> halls = hallMapper.selectList(
-                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinemaId));
-        return halls.stream()
+                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinema.getId()));
+        vo.setHallCount(halls.size());
+        vo.setHallTypes(halls.stream()
                 .map(h -> h.getHallType() != null ? h.getHallType().getCode() : null)
                 .filter(Objects::nonNull)
                 .distinct()
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));//查询影院的厅型列表
+
+        if (!halls.isEmpty()) {
+            List<Long> hallIds = halls.stream().map(Hall::getId).toList();
+            long showtimeCount = showtimeMapper.selectCount(
+                    new LambdaQueryWrapper<Showtime>()
+                            .in(Showtime::getHallId, hallIds)
+                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));//查询在售场次逻辑
+            vo.setShowtimeCount((int) showtimeCount);
+        } else {
+            vo.setShowtimeCount(0);
+        }
+
+        return vo;
     }
 
     private Double getMinPrice(Long cinemaId) {
