@@ -36,6 +36,7 @@ public enum ErrorCode {
     USER_EMAIL_EXISTS(1006, "该邮箱已被注册"),
     USER_PHONE_EXISTS(1007, "该手机号已被注册"),
     USER_EMAIL_NOT_FOUND(1008, "该邮箱未注册"),
+    AUTH_NOT_ADMIN(1009, "该账号无管理员权限"),
 
     // ---- 影片（2000-2999）----
 

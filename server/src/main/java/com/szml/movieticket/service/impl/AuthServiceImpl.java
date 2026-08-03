@@ -55,8 +55,26 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public LoginVO login(String phone, String password) {
-        log.info("用户登录请求, phone: {}", phone);
+        log.info("C端用户登录请求, phone: {}", phone);
+        User user = authenticateUser(phone, password);
+        return buildLoginVO(user);
+    }
 
+    @Override
+    public LoginVO adminLogin(String phone, String password) {
+        log.info("B端管理员登录请求, phone: {}", phone);
+        User user = authenticateUser(phone, password);
+        if (user.getRole() != UserRole.ADMIN) {
+            log.warn("B端登录失败，非管理员账号, userId: {}, role: {}", user.getId(), user.getRole());
+            throw new AuthException(ErrorCode.AUTH_NOT_ADMIN);
+        }
+        return buildLoginVO(user);
+    }
+
+    /**
+     * 认证用户：校验失败计数器、账号存在性、状态、密码。
+     */
+    private User authenticateUser(String phone, String password) {
         // 检查 Redis 失败计数器（防暴力破解）
         String failKey = REDIS_LOGIN_FAIL_PREFIX + phone;
         String failCountStr = stringRedisTemplate.opsForValue().get(failKey);
@@ -88,8 +106,13 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         // 登录成功：清除失败计数
         stringRedisTemplate.delete(failKey);
+        return user;
+    }
 
-        // 生成会话令牌，存入 Redis（每次请求刷新 TTL）
+    /**
+     * 构建登录 VO：生成会话令牌，存入 Redis，组装响应。
+     */
+    private LoginVO buildLoginVO(User user) {
         String token = UUID.randomUUID().toString().replace("-", "");
         stringRedisTemplate.opsForValue().set(
                 REDIS_AUTH_PREFIX + token,

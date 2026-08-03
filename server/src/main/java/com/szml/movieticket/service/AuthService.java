@@ -14,9 +14,14 @@ import jakarta.servlet.http.HttpServletRequest;
 public interface AuthService extends IService<User> {
 
     /**
-     * 手机号 + 密码登录。
+     * C端手机号 + 密码登录。
      */
     LoginVO login(String phone, String password);
+
+    /**
+     * B端管理员手机号 + 密码登录，非管理员角色直接拒绝。
+     */
+    LoginVO adminLogin(String phone, String password);
 
     /**
      * 发送邮箱验证码。

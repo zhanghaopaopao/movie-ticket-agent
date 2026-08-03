@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 认证接口（B/C 共用）。
+ * C端认证接口。
  *
  * @author zhanghao
  * @since 2026-07-30
