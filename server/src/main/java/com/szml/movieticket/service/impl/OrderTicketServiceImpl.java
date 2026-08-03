@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.szml.movieticket.entity.*;
 import com.szml.movieticket.enumeration.ErrorCode;
+import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.OrderException;
 import com.szml.movieticket.mapper.*;
 import com.szml.movieticket.service.OrderTicketService;
@@ -22,7 +23,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.szml.movieticket.util.AmountUtil;import com.szml.movieticket.util.OrderStatusUtil;
+import com.szml.movieticket.util.AmountUtil;
+import com.szml.movieticket.util.OrderStatusUtil;
 
 /**
  * C 端订单与支付服务实现类。
@@ -80,6 +82,10 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         // 校验场次存在且在售
         Showtime showtime = showtimeMapper.selectById(showtimeId);
         if (showtime == null) {
+            throw new OrderException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        if (showtime.getStatus() != ShowtimeStatus.ON_SALE) {
+            log.warn("场次不在售, showtimeId: {}, status: {}", showtimeId, showtime.getStatus());
             throw new OrderException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
 
