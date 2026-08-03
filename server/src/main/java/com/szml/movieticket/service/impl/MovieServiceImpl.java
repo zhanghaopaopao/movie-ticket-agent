@@ -83,7 +83,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         }
 
         // 边界校验：上映状态与上映日期的逻辑关系
-        validateMovieStatusAndDate(dto.getStatus(), dto.getReleaseDate());
+        validateMovieStatusAndDate(dto.getStatus(), dto.getReleaseDate(), true);
 
         Movie movie = new Movie();
         BeanUtils.copyProperties(dto, movie);
@@ -116,6 +116,29 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (dto.getDescription() != null) { movie.setDescription(dto.getDescription()); updatedFields.add("description"); }
         if (dto.getCast() != null) { movie.setCast(dto.getCast()); updatedFields.add("cast"); }
         if (dto.getReleaseDate() != null) { movie.setReleaseDate(dto.getReleaseDate()); updatedFields.add("releaseDate"); }
+        if (dto.getStatus() != null) {
+            // 下架保护：只要有在售场次就不允许下架
+            if (dto.getStatus() == MovieStatus.OFFLINE) {
+                long activeCount = showtimeMapper.selectCount(
+                        new LambdaQueryWrapper<Showtime>()
+                                .eq(Showtime::getMovieId, id)
+                                .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                if (activeCount > 0) {
+                    throw new MovieException(ErrorCode.MOVIE_HAS_ACTIVE_SHOWTIMES);
+                }
+            }
+            // 已下架影片重新上架时，根据上映日期自动判定状态
+            if (movie.getStatus() == MovieStatus.OFFLINE && dto.getStatus() != MovieStatus.OFFLINE) {
+                movie.setStatus(movie.getReleaseDate().isAfter(LocalDate.now())
+                        ? MovieStatus.COMING_SOON : MovieStatus.NOW_SHOWING);
+            } else {
+                movie.setStatus(dto.getStatus());
+            }
+            updatedFields.add("status");
+        }
+
+        // 编辑后校验最终状态与上映日期的关系
+        validateMovieStatusAndDate(movie.getStatus(), movie.getReleaseDate(), false);
 
         updateById(movie);
 
@@ -227,7 +250,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     /**
      * 校验上映状态与上映日期之间的边界约束。
      */
-    private void validateMovieStatusAndDate(MovieStatus status, LocalDate releaseDate) {
+    private void validateMovieStatusAndDate(MovieStatus status, LocalDate releaseDate, boolean isCreate) {
         if (status == null || releaseDate == null) {
             return;
         }
@@ -244,7 +267,10 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
                 }
                 break;
             case OFFLINE:
-                throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);
+                if (isCreate) {
+                    throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);
+                }
+                break;
         }
     }
 }

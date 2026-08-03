@@ -60,7 +60,7 @@ public class MovieController {
     }
 
     /**
-     * 编辑影片。
+     * 编辑影片信息（含状态）。
      */
     @PutMapping("/{id}")
     public Result<MovieVO> update(@PathVariable Long id, @RequestBody MovieUpdateDTO dto) {

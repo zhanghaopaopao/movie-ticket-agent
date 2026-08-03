@@ -1,5 +1,6 @@
 package com.szml.movieticket.dto;
 
+import com.szml.movieticket.enums.MovieStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -37,4 +38,7 @@ public class MovieUpdateDTO {
 
     /** 上映日期 */
     private LocalDate releaseDate;
+
+    /** 上映状态 */
+    private MovieStatus status;
 }
