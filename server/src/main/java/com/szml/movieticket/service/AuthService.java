@@ -24,10 +24,15 @@ public interface AuthService extends IService<User> {
     LoginVO adminLogin(String phone, String password);
 
     /**
+     * C端邮箱验证码登录。
+     */
+    LoginVO loginByEmailCode(String email, String code);
+
+    /**
      * 发送邮箱验证码。
      *
      * @param email   接收邮箱
-     * @param purpose 用途：0=注册 1=找回密码
+     * @param purpose 用途：0=注册 1=找回密码 2=登录
      */
     void sendEmailCode(String email, Integer purpose);
 
