@@ -55,8 +55,55 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public LoginVO login(String phone, String password) {
-        log.info("用户登录请求, phone: {}", phone);
+        log.info("C端用户登录请求, phone: {}", phone);
+        User user = authenticateUser(phone, password);
+        return buildLoginVO(user);
+    }
 
+    @Override
+    public LoginVO adminLogin(String phone, String password) {
+        log.info("B端管理员登录请求, phone: {}", phone);
+        User user = authenticateUser(phone, password);
+        if (user.getRole() != UserRole.ADMIN) {
+            log.warn("B端登录失败，非管理员账号, userId: {}, role: {}", user.getId(), user.getRole());
+            throw new AuthException(ErrorCode.AUTH_NOT_ADMIN);
+        }
+        return buildLoginVO(user);
+    }
+
+    @Override
+    public LoginVO loginByEmailCode(String email, String code) {
+        log.info("C端邮箱验证码登录请求, email: {}", email);
+
+        // 查找用户
+        User user = getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
+        if (user == null) {
+            log.warn("邮箱验证码登录失败，邮箱未注册, email: {}", email);
+            throw new AuthException(ErrorCode.USER_EMAIL_NOT_FOUND);
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            log.warn("邮箱验证码登录失败，账号已禁用, userId: {}", user.getId());
+            throw new AuthException(ErrorCode.AUTH_ACCOUNT_DISABLED);
+        }
+
+        // 校验验证码
+        String redisKey = REDIS_KEY_PREFIX + email + ":2";
+        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
+        if (storedHash == null || !storedHash.equals(sha256(code))) {
+            log.warn("邮箱验证码登录失败，验证码错误, email: {}", email);
+            throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
+        }
+
+        // 验证码一次性消费
+        stringRedisTemplate.delete(redisKey);
+
+        return buildLoginVO(user);
+    }
+
+    /**
+     * 认证用户：校验失败计数器、账号存在性、状态、密码。
+     */
+    private User authenticateUser(String phone, String password) {
         // 检查 Redis 失败计数器（防暴力破解）
         String failKey = REDIS_LOGIN_FAIL_PREFIX + phone;
         String failCountStr = stringRedisTemplate.opsForValue().get(failKey);
@@ -88,8 +135,13 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         // 登录成功：清除失败计数
         stringRedisTemplate.delete(failKey);
+        return user;
+    }
 
-        // 生成会话令牌，存入 Redis（每次请求刷新 TTL）
+    /**
+     * 构建登录 VO：生成会话令牌，存入 Redis，组装响应。
+     */
+    private LoginVO buildLoginVO(User user) {
         String token = UUID.randomUUID().toString().replace("-", "");
         stringRedisTemplate.opsForValue().set(
                 REDIS_AUTH_PREFIX + token,
@@ -136,12 +188,12 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             message.setSubject("电影票智能体 - 验证码");
             message.setText("您的验证码是：" + code + "，10分钟内有效，请勿泄露。");
             mailSender.send(message);
-            log.info("验证码邮件已发送, email: {}, purpose: {}", email, purpose == 0 ? "注册" : "找回密码");
+            log.info("验证码邮件已发送, email: {}, purpose: {}", email, purposeDesc(purpose));
         } catch (Exception e) {
             log.error("验证码邮件发送失败, email: {}", email, e);
             // 发送失败但验证码已存 Redis，开发环境可从日志查看
             log.info("========== 验证码(邮件发送失败兜底) ==========");
-            log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purpose == 0 ? "注册" : "找回密码", code);
+            log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purposeDesc(purpose), code);
             log.info("==========================================");
         }
     }
@@ -222,6 +274,16 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             sb.append(random.nextInt(10));
         }
         return sb.toString();
+    }
+
+    private static String purposeDesc(Integer purpose) {
+        if (purpose == null) return "未知";
+        switch (purpose) {
+            case 0: return "注册";
+            case 1: return "找回密码";
+            case 2: return "登录";
+            default: return "未知";
+        }
     }
 
     private static String sha256(String input) {

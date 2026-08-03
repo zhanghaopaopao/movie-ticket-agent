@@ -23,15 +23,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 认证拦截器：除 /api/auth/**（登录/注册）外的所有接口都需登录
+        // 认证拦截器：除登录/注册相关路径外的所有接口都需登录
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**")
+                .excludePathPatterns("/api/auth/**", "/api/admin/auth/**")
                 .order(1);
 
-        // 管理员权限拦截器：仅 /api/admin/**
+        // 管理员权限拦截器：仅 /api/admin/**（B端登录接口除外）
         registry.addInterceptor(adminInterceptor)
                 .addPathPatterns("/api/admin/**")
+                .excludePathPatterns("/api/admin/auth/**")
                 .order(2);
     }
 }

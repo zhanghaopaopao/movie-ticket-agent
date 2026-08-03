@@ -17,7 +17,7 @@ public class SendCodeDTO {
     @NotNull(message = "邮箱不能为空")
     private String email;
 
-    /** 0=注册 1=找回密码 */
+    /** 0=注册 1=找回密码 2=登录 */
     @NotNull(message = "用途不能为空")
     private Integer purpose;
 }

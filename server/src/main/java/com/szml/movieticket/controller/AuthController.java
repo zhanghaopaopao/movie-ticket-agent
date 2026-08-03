@@ -1,6 +1,7 @@
 package com.szml.movieticket.controller;
 
 import com.szml.movieticket.result.Result;
+import com.szml.movieticket.dto.EmailLoginDTO;
 import com.szml.movieticket.dto.LoginDTO;
 import com.szml.movieticket.dto.RegisterDTO;
 import com.szml.movieticket.dto.ResetPasswordDTO;
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 认证接口（B/C 共用）。
+ * C端认证接口。
  *
  * @author zhanghao
  * @since 2026-07-30
@@ -36,8 +37,18 @@ public class AuthController {
      */
     @PostMapping("/login")
     public Result<LoginVO> login(@Valid @RequestBody LoginDTO loginDTO) {
-        log.info("用户登录, 手机号: {}", loginDTO.getPhone());
+        log.info("C端用户登录, 手机号: {}", loginDTO.getPhone());
         LoginVO loginVO = authService.login(loginDTO.getPhone(), loginDTO.getPassword());
+        return Result.success(loginVO);
+    }
+
+    /**
+     * 邮箱验证码登录。
+     */
+    @PostMapping("/login/email")
+    public Result<LoginVO> loginByEmailCode(@Valid @RequestBody EmailLoginDTO emailLoginDTO) {
+        log.info("C端邮箱验证码登录, 邮箱: {}", emailLoginDTO.getEmail());
+        LoginVO loginVO = authService.loginByEmailCode(emailLoginDTO.getEmail(), emailLoginDTO.getCode());
         return Result.success(loginVO);
     }
 

@@ -29,6 +29,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -80,6 +82,9 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             throw new MovieException(ErrorCode.MOVIE_NAME_DUPLICATE);
         }
 
+        // 边界校验：上映状态与上映日期的逻辑关系
+        validateMovieStatusAndDate(dto.getStatus(), dto.getReleaseDate(), true);
+
         Movie movie = new Movie();
         BeanUtils.copyProperties(dto, movie);
         save(movie);
@@ -111,6 +116,29 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (dto.getDescription() != null) { movie.setDescription(dto.getDescription()); updatedFields.add("description"); }
         if (dto.getCast() != null) { movie.setCast(dto.getCast()); updatedFields.add("cast"); }
         if (dto.getReleaseDate() != null) { movie.setReleaseDate(dto.getReleaseDate()); updatedFields.add("releaseDate"); }
+        if (dto.getStatus() != null) {
+            // 下架保护：只要有在售场次就不允许下架
+            if (dto.getStatus() == MovieStatus.OFFLINE) {
+                long activeCount = showtimeMapper.selectCount(
+                        new LambdaQueryWrapper<Showtime>()
+                                .eq(Showtime::getMovieId, id)
+                                .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                if (activeCount > 0) {
+                    throw new MovieException(ErrorCode.MOVIE_HAS_ACTIVE_SHOWTIMES);
+                }
+            }
+            // 已下架影片重新上架时，根据上映日期自动判定状态
+            if (movie.getStatus() == MovieStatus.OFFLINE && dto.getStatus() != MovieStatus.OFFLINE) {
+                movie.setStatus(movie.getReleaseDate().isAfter(LocalDate.now())
+                        ? MovieStatus.COMING_SOON : MovieStatus.NOW_SHOWING);
+            } else {
+                movie.setStatus(dto.getStatus());
+            }
+            updatedFields.add("status");
+        }
+
+        // 编辑后校验最终状态与上映日期的关系
+        validateMovieStatusAndDate(movie.getStatus(), movie.getReleaseDate(), false);
 
         updateById(movie);
 
@@ -125,7 +153,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
         }
 
-        if (dto.getStatus() == MovieStatus.OFFLINE && movie.getStatus() == MovieStatus.NOW_SHOWING) {
+        if (dto.getStatus() == MovieStatus.OFFLINE) {
             long activeCount = showtimeMapper.selectCount(
                     new LambdaQueryWrapper<Showtime>()
                             .eq(Showtime::getMovieId, id)
@@ -135,7 +163,13 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             }
         }
 
-        movie.setStatus(dto.getStatus());
+        // 已下架影片重新上架时，系统根据上映日期自动判定状态
+        if (movie.getStatus() == MovieStatus.OFFLINE && dto.getStatus() != MovieStatus.OFFLINE) {
+            movie.setStatus(movie.getReleaseDate().isAfter(LocalDate.now())
+                    ? MovieStatus.COMING_SOON : MovieStatus.NOW_SHOWING);
+        } else {
+            movie.setStatus(dto.getStatus());
+        }
         updateById(movie);
 
         log.info("影片状态变更, id: {}, newStatus: {}", id, dto.getStatus());
@@ -157,30 +191,8 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         wrapper.orderByDesc(Movie::getCreateTime);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
-        LocalDate today = LocalDate.now();
-
-        List<MovieVO> records = pageResult.getRecords().stream().map(movie -> {
-            MovieVO vo = toVO(movie);
-            // 当日在售排片统计
-            List<Showtime> todayShortimes = showtimeMapper.selectList(
-                    new LambdaQueryWrapper<Showtime>()
-                            .eq(Showtime::getMovieId, movie.getId())
-                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
-                            .ge(Showtime::getStartAt, today.atStartOfDay())
-                            .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
-            vo.setShowtimeCount(todayShortimes.size());
-
-            // 覆盖影院数
-            Set<Long> cinemaIds = new HashSet<>();
-            for (Showtime st : todayShortimes) {
-                Hall hall = hallMapper.selectById(st.getHallId());
-                if (hall != null) {
-                    cinemaIds.add(hall.getCinemaId());
-                }
-            }
-            vo.setCinemaCount(cinemaIds.size());
-            return vo;
-        }).collect(Collectors.toList());
+        List<MovieVO> records = pageResult.getRecords().stream()
+                .map(this::toVO).collect(Collectors.toList());
 
         MoviePageVO pageVO = new MoviePageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -196,24 +208,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (movie == null) {
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
         }
-        MovieVO vo = toVO(movie);
-
-        // todayShowtimeCoverage
-        LocalDate today = LocalDate.now();
-        List<Showtime> todayShortimes = showtimeMapper.selectList(
-                new LambdaQueryWrapper<Showtime>()
-                        .eq(Showtime::getMovieId, id)
-                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
-                        .ge(Showtime::getStartAt, today.atStartOfDay())
-                        .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
-        vo.setShowtimeCount(todayShortimes.size());
-        Set<Long> cinemaIds = new HashSet<>();
-        for (Showtime st : todayShortimes) {
-            Hall hall = hallMapper.selectById(st.getHallId());
-            if (hall != null) cinemaIds.add(hall.getCinemaId());
-        }
-        vo.setCinemaCount(cinemaIds.size());
-        return vo;
+        return toVO(movie);
     }
 
     private LambdaQueryWrapper<Movie> buildQueryWrapper(String keyword, String status) {
@@ -232,7 +227,50 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         BeanUtils.copyProperties(movie, vo);
         vo.setStatus(movie.getStatus() != null ? movie.getStatus().getCode() : null);
         vo.setStatusDesc(movie.getStatus() != null ? movie.getStatus().getDesc() : null);
-        vo.setShowtimeCount(0);
+
+        // 当日在售场次和覆盖影院数
+        LocalDate today = LocalDate.now();
+        List<Showtime> todayShortimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .eq(Showtime::getMovieId, movie.getId())
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                        .ge(Showtime::getStartAt, today.atStartOfDay())
+                        .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
+        vo.setShowtimeCount(todayShortimes.size());
+
+        Set<Long> cinemaIds = new HashSet<>();
+        for (Showtime st : todayShortimes) {
+            Hall hall = hallMapper.selectById(st.getHallId());
+            if (hall != null) cinemaIds.add(hall.getCinemaId());
+        }
+        vo.setCinemaCount(cinemaIds.size());
         return vo;
+    }
+
+    /**
+     * 校验上映状态与上映日期之间的边界约束。
+     */
+    private void validateMovieStatusAndDate(MovieStatus status, LocalDate releaseDate, boolean isCreate) {
+        if (status == null || releaseDate == null) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        switch (status) {
+            case NOW_SHOWING:
+                if (releaseDate.isAfter(today)) {
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_PAST);
+                }
+                break;
+            case COMING_SOON:
+                if (!releaseDate.isAfter(today)) {
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_FUTURE);
+                }
+                break;
+            case OFFLINE:
+                if (isCreate) {
+                    throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);
+                }
+                break;
+        }
     }
 }

@@ -37,12 +37,16 @@ public enum ErrorCode {
     USER_EMAIL_EXISTS(1006, "该邮箱已被注册"),
     USER_PHONE_EXISTS(1007, "该手机号已被注册"),
     USER_EMAIL_NOT_FOUND(1008, "该邮箱未注册"),
+    AUTH_NOT_ADMIN(1009, "该账号无管理员权限"),
 
     // ---- 影片（2000-2999）----
 
     MOVIE_NOT_FOUND(2000, "影片不存在"),
     MOVIE_NAME_DUPLICATE(2001, "影片名称已存在"),
     MOVIE_HAS_ACTIVE_SHOWTIMES(2002, "该影片存在在售场次，不可下架"),
+    MOVIE_STATUS_INVALID(2003, "新增影片不能选择已下架状态"),
+    MOVIE_RELEASE_DATE_PAST(2004, "热映中的影片上映日期不能晚于今天"),
+    MOVIE_RELEASE_DATE_FUTURE(2005, "待上映的影片上映日期必须在今天之后"),
 
     // ---- 影院（3000-3999）----
 
