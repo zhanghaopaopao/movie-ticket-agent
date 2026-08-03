@@ -7,12 +7,14 @@ import com.szml.movieticket.dto.DraftSaveDTO;
 import com.szml.movieticket.entity.Cinema;
 import com.szml.movieticket.entity.Movie;
 import com.szml.movieticket.entity.PurchaseDraft;
+import com.szml.movieticket.entity.Seat;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.exception.DraftException;
 import com.szml.movieticket.mapper.CinemaMapper;
 import com.szml.movieticket.mapper.MovieMapper;
 import com.szml.movieticket.mapper.PurchaseDraftMapper;
+import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.service.DraftService;
 import com.szml.movieticket.vo.DraftVO;
@@ -39,6 +41,7 @@ public class DraftServiceImpl extends ServiceImpl<PurchaseDraftMapper, PurchaseD
     private final MovieMapper movieMapper;
     private final CinemaMapper cinemaMapper;
     private final ShowtimeMapper showtimeMapper;
+    private final SeatMapper seatMapper;
 
     @Override
     public DraftVO getCurrentDraft(Long userId) {
@@ -178,9 +181,20 @@ public class DraftServiceImpl extends ServiceImpl<PurchaseDraftMapper, PurchaseD
             vo.setBudget(JSONUtil.toBean(draft.getBudgetJson(), DraftVO.Budget.class));
         }
 
-        // 座位
+        // 座位：seatsJson 存的是座位ID数组，需查 Seat 表转为 rowNo/seatNo
         if (StringUtils.hasText(draft.getSeatsJson())) {
-            vo.setSeats(JSONUtil.toList(draft.getSeatsJson(), DraftVO.SeatItem.class));
+            List<Long> seatIds = JSONUtil.toList(draft.getSeatsJson(), Long.class);
+            List<DraftVO.SeatItem> seatItems = new ArrayList<>();
+            for (Long seatId : seatIds) {
+                Seat seat = seatMapper.selectById(seatId);
+                if (seat != null) {
+                    DraftVO.SeatItem item = new DraftVO.SeatItem();
+                    item.setRowNo(seat.getRowNo());
+                    item.setSeatNo(seat.getSeatNo());
+                    seatItems.add(item);
+                }
+            }
+            vo.setSeats(seatItems);
         }
 
         // 是否可进入选座
