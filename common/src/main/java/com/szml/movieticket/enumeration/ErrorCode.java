@@ -33,6 +33,7 @@ public enum ErrorCode {
     AUTH_ACCOUNT_LOCKED(1003, "账号已被锁定，请稍后重试"),
     EMAIL_CODE_INVALID(1004, "验证码错误或已过期"),
     EMAIL_CODE_RATE_LIMIT(1005, "请60秒后再发送验证码"),
+    EMAIL_SEND_FAILED(1008, "验证码邮件发送失败，请稍后重试"),
     USER_EMAIL_EXISTS(1006, "该邮箱已被注册"),
     USER_PHONE_EXISTS(1007, "该手机号已被注册"),
     USER_EMAIL_NOT_FOUND(1008, "该邮箱未注册"),
