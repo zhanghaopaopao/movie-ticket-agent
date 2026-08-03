@@ -53,7 +53,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     @Override
     public MoviePageVO pageMovies(int page, int size, String keyword, String status) {
         LambdaQueryWrapper<Movie> wrapper = buildQueryWrapper(keyword, status);
-        wrapper.orderByDesc(Movie::getCreateTime);
+        wrapper.orderByDesc(Movie::getReleaseDate);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
         List<MovieVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
@@ -188,7 +188,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (StringUtils.hasText(keyword)) {
             wrapper.like(Movie::getName, keyword);
         }
-        wrapper.orderByDesc(Movie::getCreateTime);
+        wrapper.orderByDesc(Movie::getReleaseDate);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
         List<MovieVO> records = pageResult.getRecords().stream()
