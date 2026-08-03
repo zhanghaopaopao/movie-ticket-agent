@@ -27,7 +27,7 @@ public class MovieUserController {
      */
     @GetMapping
     public Result<MoviePageVO> list(@RequestParam(defaultValue = "1") int page,
-                                     @RequestParam(defaultValue = "20") int size,
+                                     @RequestParam(defaultValue = "10") int size,
                                      @RequestParam(required = false) String status,
                                      @RequestParam(required = false) String genre,
                                      @RequestParam(required = false) String keyword) {

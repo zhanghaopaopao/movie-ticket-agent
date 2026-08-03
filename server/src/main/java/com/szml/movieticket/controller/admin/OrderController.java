@@ -27,7 +27,7 @@ public class OrderController {
      */
     @GetMapping
     public Result<OrderPageVO> list(@RequestParam(defaultValue = "1") int page,
-                                     @RequestParam(defaultValue = "20") int size,
+                                     @RequestParam(defaultValue = "10") int size,
                                      @RequestParam(required = false) String orderNo,
                                      @RequestParam(required = false) String email,
                                      @RequestParam(required = false) Long movieId,

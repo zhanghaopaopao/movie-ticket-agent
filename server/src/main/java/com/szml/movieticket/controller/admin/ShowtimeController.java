@@ -34,7 +34,7 @@ public class ShowtimeController {
      */
     @GetMapping
     public Result<ShowtimePageVO> list(@RequestParam(defaultValue = "1") int page,
-                                        @RequestParam(defaultValue = "20") int size,
+                                        @RequestParam(defaultValue = "10") int size,
                                         @RequestParam(required = false) Long movieId,
                                         @RequestParam(required = false) Long cinemaId,
                                         @RequestParam(required = false) String date,

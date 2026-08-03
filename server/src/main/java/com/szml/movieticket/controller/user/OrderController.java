@@ -63,7 +63,7 @@ public class OrderController {
      */
     @GetMapping
     public Result<UserOrderPageVO> list(@RequestParam(defaultValue = "1") int page,
-                                         @RequestParam(defaultValue = "20") int size,
+                                         @RequestParam(defaultValue = "10") int size,
                                          @RequestParam(required = false) String status) {
         Long userId = UserContext.getUserId();
         log.info("查询订单列表, 用户ID: {}, 订单状态: {}", userId, status);
