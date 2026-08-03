@@ -130,7 +130,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
         }
 
-        if (dto.getStatus() == MovieStatus.OFFLINE && movie.getStatus() == MovieStatus.NOW_SHOWING) {
+        if (dto.getStatus() == MovieStatus.OFFLINE) {
             long activeCount = showtimeMapper.selectCount(
                     new LambdaQueryWrapper<Showtime>()
                             .eq(Showtime::getMovieId, id)
@@ -140,7 +140,13 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             }
         }
 
-        movie.setStatus(dto.getStatus());
+        // 已下架影片重新上架时，系统根据上映日期自动判定状态
+        if (movie.getStatus() == MovieStatus.OFFLINE && dto.getStatus() != MovieStatus.OFFLINE) {
+            movie.setStatus(movie.getReleaseDate().isAfter(LocalDate.now())
+                    ? MovieStatus.COMING_SOON : MovieStatus.NOW_SHOWING);
+        } else {
+            movie.setStatus(dto.getStatus());
+        }
         updateById(movie);
 
         log.info("影片状态变更, id: {}, newStatus: {}", id, dto.getStatus());
