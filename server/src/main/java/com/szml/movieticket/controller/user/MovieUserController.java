@@ -30,10 +30,13 @@ public class MovieUserController {
                                      @RequestParam(defaultValue = "10") int size,
                                      @RequestParam(required = false) String status,
                                      @RequestParam(required = false) String genre,
-                                     @RequestParam(required = false) String keyword) {
-        log.info("C端查询影片列表, 页码: {}, 每页条数: {}, 上映状态: {}, 影片类型: {}, 搜索关键词: {}",
-                page, size, status, genre, keyword);
-        MoviePageVO moviePageVO = movieService.listMoviesForUser(page, size, status, genre, keyword);
+                                     @RequestParam(required = false) String keyword,
+                                     @RequestParam(defaultValue = "createTime") String sortBy,
+                                     @RequestParam(defaultValue = "desc") String sortOrder) {
+        log.info("C端查询影片列表, 页码: {}, 每页条数: {}, 上映状态: {}, 影片类型: {}, 搜索关键词: {}, 排序字段: {}, 排序方向: {}",
+                page, size, status, genre, keyword, sortBy, sortOrder);
+        MoviePageVO moviePageVO = movieService.listMoviesForUser(
+                page, size, status, genre, keyword, sortBy, sortOrder);
         return Result.success(moviePageVO);
     }
 

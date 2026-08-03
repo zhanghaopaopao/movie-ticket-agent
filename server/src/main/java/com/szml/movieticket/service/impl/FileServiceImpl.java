@@ -1,6 +1,7 @@
 package com.szml.movieticket.service.impl;
 
 import com.qcloud.cos.COSClient;
+import com.qcloud.cos.model.ObjectMetadata;
 import com.qcloud.cos.model.PutObjectRequest;
 import com.szml.movieticket.dto.UploadResultDTO;
 import com.szml.movieticket.enumeration.ErrorCode;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class FileServiceImpl implements FileService {
 
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024L;
+    private static final String IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
 
     private final COSClient cosClient;
@@ -66,6 +68,11 @@ public class FileServiceImpl implements FileService {
             file.transferTo(tempFile.toFile());
 
             PutObjectRequest putObjectRequest = new PutObjectRequest(bucket, cosKey, tempFile.toFile());
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(file.getSize());
+            metadata.setContentType(resolveContentType(extension));
+            metadata.setCacheControl(IMMUTABLE_CACHE_CONTROL);
+            putObjectRequest.setMetadata(metadata);
             cosClient.putObject(putObjectRequest);
 
             // 清理临时文件
@@ -94,5 +101,14 @@ public class FileServiceImpl implements FileService {
             return null;
         }
         return filename.substring(filename.lastIndexOf('.') + 1);
+    }
+
+    private String resolveContentType(String extension) {
+        return switch (extension.toLowerCase()) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "webp" -> "image/webp";
+            default -> "application/octet-stream";
+        };
     }
 }
