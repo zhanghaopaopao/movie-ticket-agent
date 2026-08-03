@@ -95,7 +95,7 @@ public enum ErrorCode {
 
     FILE_UPLOAD_ERROR(8000, "文件上传失败"),
     FILE_FORMAT_INVALID(8001, "仅支持 jpg/png/webp 格式的图片文件"),
-    FILE_SIZE_EXCEED(8002, "文件大小不能超过 5MB"),
+    FILE_SIZE_EXCEED(8002, "文件大小不能超过 10MB"),
 
     // ---- 用户（9000-9999）----
 

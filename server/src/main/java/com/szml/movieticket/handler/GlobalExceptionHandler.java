@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.stream.Collectors;
 
@@ -33,6 +34,12 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.error("MethodArgumentNotValidException", e);
         return Result.error(ErrorCode.PARAM_ERROR.getCode(), errorMsg);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public Result<?> maxUploadSizeExceededExceptionHandler(MaxUploadSizeExceededException e) {
+        log.warn("文件上传超过大小限制");
+        return Result.error(ErrorCode.FILE_SIZE_EXCEED.getCode(), ErrorCode.FILE_SIZE_EXCEED.getMessage());
     }
 
     @ExceptionHandler(RuntimeException.class)

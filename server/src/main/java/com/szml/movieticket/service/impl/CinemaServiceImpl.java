@@ -45,7 +45,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
 
     @Override
     public CinemaPageVO pageCinemas(int page, int size, String keyword, String district, Integer status) {
-        LambdaQueryWrapper<Cinema> wrapper = buildQueryWrapper(keyword, district, status);
+        LambdaQueryWrapper<Cinema> wrapper = buildQueryWrapper(keyword, district, status);//根据相应条件构建查询条件
         wrapper.orderByDesc(Cinema::getCreateTime);
 
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
@@ -262,14 +262,14 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
                 .map(h -> h.getHallType() != null ? h.getHallType().getCode() : null)
                 .filter(Objects::nonNull)
                 .distinct()
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList()));//查询影院的厅型列表
 
         if (!halls.isEmpty()) {
             List<Long> hallIds = halls.stream().map(Hall::getId).toList();
             long showtimeCount = showtimeMapper.selectCount(
                     new LambdaQueryWrapper<Showtime>()
                             .in(Showtime::getHallId, hallIds)
-                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));//查询在售场次逻辑
             vo.setShowtimeCount((int) showtimeCount);
         } else {
             vo.setShowtimeCount(0);
