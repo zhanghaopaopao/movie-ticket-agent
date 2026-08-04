@@ -1,6 +1,7 @@
 package com.szml.movieticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.szml.movieticket.dto.HallCreateDTO;
 import com.szml.movieticket.dto.HallUpdateDTO;
@@ -23,6 +24,7 @@ import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.HallService;
+import com.szml.movieticket.vo.HallPageVO;
 import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
 import com.szml.movieticket.vo.SeatVO;
@@ -31,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -55,11 +58,23 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     private final OrderItemMapper orderItemMapper;
 
     @Override
-    public List<HallVO> listHallsByCinemaId(Long cinemaId) {
-        List<Hall> halls = list(new LambdaQueryWrapper<Hall>()
-                .eq(Hall::getCinemaId, cinemaId)
-                .orderByAsc(Hall::getId));
-        return halls.stream().map(this::toVO).collect(Collectors.toList());
+    public HallPageVO pageHallsByCinemaId(int page, int size, Long cinemaId, String keyword) {
+        LambdaQueryWrapper<Hall> wrapper = new LambdaQueryWrapper<Hall>()
+                .eq(Hall::getCinemaId, cinemaId);
+        if (StringUtils.hasText(keyword)) {
+            wrapper.like(Hall::getName, keyword);
+        }
+        wrapper.orderByAsc(Hall::getId);
+
+        Page<Hall> pageResult = page(new Page<>(page, size), wrapper);
+        List<HallVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+
+        HallPageVO pageVO = new HallPageVO();
+        pageVO.setTotal(pageResult.getTotal());
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(records);
+        return pageVO;
     }
 
     @Override

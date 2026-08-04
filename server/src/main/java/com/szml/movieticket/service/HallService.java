@@ -7,11 +7,10 @@ import com.szml.movieticket.dto.SeatCreateDTO;
 import com.szml.movieticket.dto.SeatLayoutSaveDTO;
 import com.szml.movieticket.dto.SeatUpdateDTO;
 import com.szml.movieticket.entity.Hall;
+import com.szml.movieticket.vo.HallPageVO;
 import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
 import com.szml.movieticket.vo.SeatVO;
-
-import java.util.List;
 
 /**
  * 影厅服务接口。
@@ -22,9 +21,9 @@ import java.util.List;
 public interface HallService extends IService<Hall> {
 
     /**
-     * 查询某影院下的所有影厅。
+     * 分页查询某影院下的影厅。
      */
-    List<HallVO> listHallsByCinemaId(Long cinemaId);
+    HallPageVO pageHallsByCinemaId(int page, int size, Long cinemaId, String keyword);
 
     /**
      * 新增影厅。

@@ -7,6 +7,7 @@ import com.szml.movieticket.dto.SeatLayoutSaveDTO;
 import com.szml.movieticket.dto.SeatUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.HallService;
+import com.szml.movieticket.vo.HallPageVO;
 import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
 import com.szml.movieticket.vo.SeatVO;
@@ -14,8 +15,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * 影厅管理 Controller（B 端）。
@@ -31,13 +30,16 @@ public class HallController {
     private final HallService hallService;
 
     /**
-     * 查询某影院下的所有影厅。
+     * 分页查询某影院下的影厅。
      */
     @GetMapping("/api/admin/cinemas/{cinemaId}/halls")
-    public Result<List<HallVO>> listByCinema(@PathVariable Long cinemaId) {
-        log.info("查询影厅列表, 影院ID: {}", cinemaId);
-        List<HallVO> hallVOList = hallService.listHallsByCinemaId(cinemaId);
-        return Result.success(hallVOList);
+    public Result<HallPageVO> listByCinema(@PathVariable Long cinemaId,
+                                           @RequestParam(defaultValue = "1") int page,
+                                           @RequestParam(defaultValue = "20") int size,
+                                           @RequestParam(required = false) String keyword) {
+        log.info("查询影厅列表, 影院ID: {}, 页码: {}, 每页条数: {}, 搜索关键词: {}", cinemaId, page, size, keyword);
+        HallPageVO hallPageVO = hallService.pageHallsByCinemaId(page, size, cinemaId, keyword);
+        return Result.success(hallPageVO);
     }
 
     /**
