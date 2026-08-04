@@ -18,6 +18,7 @@ import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.MovieMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.service.MovieService;
+import com.szml.movieticket.vo.MovieOptionVO;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 import lombok.RequiredArgsConstructor;
@@ -208,6 +209,17 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
 
         removeById(id);
         log.info("影片删除成功, id: {}, name: {}", id, movie.getName());
+    }
+
+    @Override
+    public List<MovieOptionVO> listMovieOptions() {
+        LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<Movie>()
+                .ne(Movie::getStatus, MovieStatus.OFFLINE)
+                .select(Movie::getId, Movie::getName)
+                .orderByAsc(Movie::getCreateTime);
+        return list(wrapper).stream()
+                .map(m -> { MovieOptionVO vo = new MovieOptionVO(); vo.setId(m.getId()); vo.setName(m.getName()); return vo; })
+                .collect(Collectors.toList());
     }
 
     @Override

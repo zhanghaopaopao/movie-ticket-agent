@@ -5,9 +5,11 @@ import com.szml.movieticket.dto.MovieCreateDTO;
 import com.szml.movieticket.dto.MovieStatusDTO;
 import com.szml.movieticket.dto.MovieUpdateDTO;
 import com.szml.movieticket.entity.Movie;
+import com.szml.movieticket.vo.MovieOptionVO;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,6 +49,11 @@ public interface MovieService extends IService<Movie> {
      * 删除影片（有关联场次时不允许删除）。
      */
     void deleteMovie(Long id);
+
+    /**
+     * 查询未下架影片的 id + name，供下拉选项使用。
+     */
+    List<MovieOptionVO> listMovieOptions();
 
     /**
      * C端分页查询影片列表（含 showtimeCount、cinemaCount 统计）。

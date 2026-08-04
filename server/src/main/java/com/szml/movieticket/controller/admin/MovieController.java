@@ -5,9 +5,11 @@ import com.szml.movieticket.dto.MovieStatusDTO;
 import com.szml.movieticket.dto.MovieUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.MovieService;
+import com.szml.movieticket.vo.MovieOptionVO;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +39,15 @@ public class MovieController {
         log.info("B端查询影片列表, 页码: {}, 每页条数: {}, 搜索关键词: {}, 上映状态: {}", page, size, keyword, status);
         MoviePageVO moviePageVO = movieService.pageMovies(page, size, keyword, status);
         return Result.success(moviePageVO);
+    }
+
+    /**
+     * 查询未下架影片选项（id + name），供下拉框使用。
+     */
+    @GetMapping("/options")
+    public Result<List<MovieOptionVO>> options() {
+        List<MovieOptionVO> options = movieService.listMovieOptions();
+        return Result.success(options);
     }
 
     /**
