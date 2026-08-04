@@ -65,10 +65,10 @@ public class CinemaController {
      * 编辑影院。
      */
     @PutMapping("/{id}")
-    public Result<CinemaVO> update(@PathVariable Long id, @RequestBody CinemaUpdateDTO dto) {
+    public Result<Void> update(@PathVariable Long id, @RequestBody CinemaUpdateDTO dto) {
         log.info("编辑影院, 影院ID: {}", id);
-        CinemaVO cinemaVO = cinemaService.updateCinema(id, dto);
-        return Result.success(cinemaVO);
+        cinemaService.updateCinema(id, dto);
+        return Result.success();
     }
 
     /**

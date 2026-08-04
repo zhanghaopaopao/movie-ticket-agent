@@ -34,7 +34,7 @@ public interface CinemaService extends IService<Cinema> {
     /**
      * 编辑影院。
      */
-    CinemaVO updateCinema(Long id, CinemaUpdateDTO dto);
+    void updateCinema(Long id, CinemaUpdateDTO dto);
 
     /**
      * 启停影院。
