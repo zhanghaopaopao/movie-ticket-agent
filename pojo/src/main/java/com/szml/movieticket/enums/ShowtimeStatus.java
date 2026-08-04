@@ -14,7 +14,8 @@ public enum ShowtimeStatus {
 
     SOLD_OUT(0, "停售"),
     ON_SALE(1, "在售"),
-    SOLD_OUT_ALL(2, "售罄");
+    SOLD_OUT_ALL(2, "售罄"),
+    ENDED(3, "已结束");
 
     @EnumValue
     private final int code;

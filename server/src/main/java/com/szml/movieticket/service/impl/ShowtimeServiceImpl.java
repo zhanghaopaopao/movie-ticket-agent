@@ -79,6 +79,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     public ShowtimePageVO pageShowtimes(int page, int size, Long movieId, Long cinemaId, String date, String status) {
         //根据电影id,影院id,开场时间,以及场次状态进行查询相关列表
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ne(Showtime::getStatus, ShowtimeStatus.ENDED);
         if (movieId != null) {
             wrapper.eq(Showtime::getMovieId, movieId);
         }
@@ -510,7 +511,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<Showtime>()
                 .eq(Showtime::getHallId, hallId)
-                .ne(Showtime::getStatus, ShowtimeStatus.SOLD_OUT_ALL)
+                .ne(Showtime::getStatus, ShowtimeStatus.ENDED)
                 .gt(Showtime::getEndAt, startAt)
                 .lt(Showtime::getStartAt, endAt);
         if (excludeShowtimeId != null) {
