@@ -116,7 +116,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
     @Override
     @Transactional
-    public ShowtimeVO createShowtime(ShowtimeCreateDTO dto) {
+    public void createShowtime(ShowtimeCreateDTO dto) {
         Movie movie = movieMapper.selectById(dto.getMovieId());
         if (movie == null) {
             throw new ShowtimeException(ErrorCode.MOVIE_NOT_FOUND);
@@ -160,12 +160,10 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         initializeShowtimeSeats(showtime);
         log.info("场次新增成功, id: {}, movieId: {}, hallId: {}, startAt: {}", showtime.getId(), dto.getMovieId(), dto.getHallId(), startAt);
-
-        return toVO(showtime);
     }
 
     @Override
-    public ShowtimeVO updateShowtime(Long id, ShowtimeUpdateDTO dto) {
+    public void updateShowtime(Long id, ShowtimeUpdateDTO dto) {
         Showtime showtime = getById(id);
         if (showtime == null) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
@@ -174,8 +172,20 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         List<String> updatedFields = new ArrayList<>();
 
         if (dto.getStartAt() != null) {
-            // TODO: 校验是否已有锁座或订单
-            log.warn("修改场次时间，暂未校验锁座订单, showtimeId: {}", id);
+            // 有已锁定或已售座位时不允许修改时间
+            long lockedOrSold = showtimeSeatMapper.selectCount(
+                    new LambdaQueryWrapper<ShowtimeSeat>()
+                            .eq(ShowtimeSeat::getShowtimeId, id)
+                            .in(ShowtimeSeat::getStatus, INVENTORY_LOCKED, INVENTORY_SOLD));
+            if (lockedOrSold > 0) {
+                throw new ShowtimeException(ErrorCode.SHOWTIME_HAS_LOCKED_SEATS);
+            }
+
+            // 只允许改为明天及之后的场次
+            LocalDateTime tomorrow = LocalDate.now().plusDays(1).atStartOfDay();
+            if (dto.getStartAt().isBefore(tomorrow)) {
+                throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);
+            }
 
             // 重新计算 endAt
             Movie movie = movieMapper.selectById(showtime.getMovieId());
@@ -198,7 +208,6 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         updateById(showtime);
 
         log.info("场次编辑成功, id: {}, updatedFields: {}", id, updatedFields);
-        return toVO(showtime);
     }
 
     @Override

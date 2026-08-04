@@ -49,20 +49,20 @@ public class ShowtimeController {
      * 新增场次。
      */
     @PostMapping
-    public Result<ShowtimeVO> create(@Valid @RequestBody ShowtimeCreateDTO dto) {
+    public Result<Void> create(@Valid @RequestBody ShowtimeCreateDTO dto) {
         log.info("新增场次, 影片ID: {}, 影厅ID: {}, 开场时间: {}", dto.getMovieId(), dto.getHallId(), dto.getStartAt());
-        ShowtimeVO showtimeVO = showtimeService.createShowtime(dto);
-        return Result.success(showtimeVO);
+        showtimeService.createShowtime(dto);
+        return Result.success();
     }
 
     /**
      * 编辑场次。
      */
     @PutMapping("/{id}")
-    public Result<ShowtimeVO> update(@PathVariable Long id, @RequestBody ShowtimeUpdateDTO dto) {
+    public Result<Void> update(@PathVariable Long id, @RequestBody ShowtimeUpdateDTO dto) {
         log.info("编辑场次, 场次ID: {}", id);
-        ShowtimeVO showtimeVO = showtimeService.updateShowtime(id, dto);
-        return Result.success(showtimeVO);
+        showtimeService.updateShowtime(id, dto);
+        return Result.success();
     }
 
     /**

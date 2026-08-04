@@ -28,12 +28,12 @@ public interface ShowtimeService extends IService<Showtime> {
     /**
      * 新增场次。
      */
-    ShowtimeVO createShowtime(ShowtimeCreateDTO dto);
+    void createShowtime(ShowtimeCreateDTO dto);
 
     /**
      * 编辑场次。
      */
-    ShowtimeVO updateShowtime(Long id, ShowtimeUpdateDTO dto);
+    void updateShowtime(Long id, ShowtimeUpdateDTO dto);
 
     /**
      * 停售/售罄场次。
