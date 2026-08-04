@@ -14,6 +14,9 @@ import com.szml.movieticket.entity.Seat;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.entity.ShowtimeSeat;
 import com.szml.movieticket.enumeration.ErrorCode;
+import com.szml.movieticket.enums.CinemaStatus;
+import com.szml.movieticket.enums.HallStatus;
+import com.szml.movieticket.enums.MovieStatus;
 import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.ShowtimeException;
 import com.szml.movieticket.mapper.CinemaMapper;
@@ -117,9 +120,21 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (movie == null) {
             throw new ShowtimeException(ErrorCode.MOVIE_NOT_FOUND);
         }
+        if (movie.getStatus() == MovieStatus.OFFLINE) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_MOVIE_OFFLINE);
+        }
+
         Hall hall = hallMapper.selectById(dto.getHallId());
         if (hall == null) {
             throw new ShowtimeException(ErrorCode.HALL_NOT_FOUND);
+        }
+        if (hall.getStatus() == HallStatus.INACTIVE) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_INACTIVE);
+        }
+
+        Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
+        if (cinema != null && cinema.getStatus() == CinemaStatus.INACTIVE) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_CINEMA_INACTIVE);
         }
 
         // 计算散场时间
