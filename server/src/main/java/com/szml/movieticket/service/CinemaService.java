@@ -5,8 +5,11 @@ import com.szml.movieticket.dto.CinemaCreateDTO;
 import com.szml.movieticket.dto.CinemaStatusDTO;
 import com.szml.movieticket.dto.CinemaUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
+import com.szml.movieticket.vo.CinemaOptionVO;
 import com.szml.movieticket.vo.CinemaPageVO;
 import com.szml.movieticket.vo.CinemaVO;
+
+import java.util.List;
 
 /**
  * 影院服务接口。
@@ -40,6 +43,11 @@ public interface CinemaService extends IService<Cinema> {
      * 启停影院。
      */
     void updateCinemaStatus(Long id, CinemaStatusDTO dto);
+
+    /**
+     * 查询未停用影院及其未停用影厅的 id + name，供下拉联动使用。
+     */
+    List<CinemaOptionVO> listCinemaOptions();
 
     /**
      * C端分页查询影院列表（含 minPrice、hallTypes）。

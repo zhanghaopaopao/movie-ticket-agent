@@ -5,9 +5,11 @@ import com.szml.movieticket.dto.CinemaStatusDTO;
 import com.szml.movieticket.dto.CinemaUpdateDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.CinemaService;
+import com.szml.movieticket.vo.CinemaOptionVO;
 import com.szml.movieticket.vo.CinemaPageVO;
 import com.szml.movieticket.vo.CinemaVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +41,15 @@ public class CinemaController {
                 page, size, keyword, district, status);
         CinemaPageVO cinemaPageVO = cinemaService.pageCinemas(page, size, keyword, district, status);
         return Result.success(cinemaPageVO);
+    }
+
+    /**
+     * 查询未停用影院及未停用影厅选项（id + name），供下拉联动使用。
+     */
+    @GetMapping("/options")
+    public Result<List<CinemaOptionVO>> options() {
+        List<CinemaOptionVO> options = cinemaService.listCinemaOptions();
+        return Result.success(options);
     }
 
     /**

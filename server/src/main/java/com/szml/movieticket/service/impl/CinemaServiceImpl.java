@@ -9,6 +9,7 @@ import com.szml.movieticket.dto.CinemaStatusDTO;
 import com.szml.movieticket.dto.CinemaUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
 import com.szml.movieticket.entity.Hall;
+import com.szml.movieticket.enums.HallStatus;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.CinemaStatus;
@@ -18,6 +19,7 @@ import com.szml.movieticket.mapper.CinemaMapper;
 import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.service.CinemaService;
+import com.szml.movieticket.vo.CinemaOptionVO;
 import com.szml.movieticket.vo.CinemaPageVO;
 import com.szml.movieticket.vo.CinemaVO;
 import lombok.RequiredArgsConstructor;
@@ -139,6 +141,40 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         updateById(cinema);
 
         log.info("影院状态变更, id: {}, newStatus: {}", id, dto.getStatus());
+    }
+
+    @Override
+    public List<CinemaOptionVO> listCinemaOptions() {
+        List<Cinema> cinemas = list(new LambdaQueryWrapper<Cinema>()
+                .ne(Cinema::getStatus, CinemaStatus.INACTIVE)
+                .select(Cinema::getId, Cinema::getName)
+                .orderByAsc(Cinema::getCreateTime));
+
+        if (cinemas.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> cinemaIds = cinemas.stream().map(Cinema::getId).toList();
+        List<Hall> allHalls = hallMapper.selectList(new LambdaQueryWrapper<Hall>()
+                .in(Hall::getCinemaId, cinemaIds)
+                .ne(Hall::getStatus, HallStatus.INACTIVE)
+                .select(Hall::getId, Hall::getName, Hall::getCinemaId)
+                .orderByAsc(Hall::getId));
+        Map<Long, List<CinemaOptionVO.HallBrief>> hallMap = new HashMap<>();
+        for (Hall hall : allHalls) {
+            CinemaOptionVO.HallBrief brief = new CinemaOptionVO.HallBrief();
+            brief.setId(hall.getId());
+            brief.setName(hall.getName());
+            hallMap.computeIfAbsent(hall.getCinemaId(), k -> new ArrayList<>()).add(brief);
+        }
+
+        return cinemas.stream().map(c -> {
+            CinemaOptionVO vo = new CinemaOptionVO();
+            vo.setId(c.getId());
+            vo.setName(c.getName());
+            vo.setHalls(hallMap.getOrDefault(c.getId(), List.of()));
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     @Override
