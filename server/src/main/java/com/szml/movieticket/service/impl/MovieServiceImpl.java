@@ -74,7 +74,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
-    public MovieVO createMovie(MovieCreateDTO dto) {
+    public void createMovie(MovieCreateDTO dto) {
         long count = count(new LambdaQueryWrapper<Movie>().eq(Movie::getName, dto.getName()));
         if (count > 0) {
             throw new MovieException(ErrorCode.MOVIE_NAME_DUPLICATE);
@@ -88,7 +88,6 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         save(movie);
 
         log.info("影片新增成功, id: {}, name: {}", movie.getId(), movie.getName());
-        return toVO(movie);
     }
 
     @Override

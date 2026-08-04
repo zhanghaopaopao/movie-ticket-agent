@@ -53,10 +53,10 @@ public class MovieController {
      * 新增影片。
      */
     @PostMapping
-    public Result<MovieVO> create(@Valid @RequestBody MovieCreateDTO dto) {
+    public Result<Void> create(@Valid @RequestBody MovieCreateDTO dto) {
         log.info("新增影片, 影片名称: {}", dto.getName());
-        MovieVO movieVO = movieService.createMovie(dto);
-        return Result.success(movieVO);
+        movieService.createMovie(dto);
+        return Result.success();
     }
 
     /**

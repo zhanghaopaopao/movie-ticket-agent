@@ -31,7 +31,7 @@ public interface MovieService extends IService<Movie> {
     /**
      * 新增影片。
      */
-    MovieVO createMovie(MovieCreateDTO dto);
+    void createMovie(MovieCreateDTO dto);
 
     /**
      * 编辑影片。
