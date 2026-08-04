@@ -124,7 +124,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         // 计算散场时间
         LocalDateTime startAt = dto.getStartAt();
-        LocalDateTime endAt = startAt.plusMinutes(movie.getDuration() + CLEANING_MINUTES);
+        LocalDateTime endAt = startAt.plusMinutes(movie.getDuration() + CLEANING_MINUTES);//加上10分钟
 
         // 时间冲突校验：同一影厅，新场次不能与已有场次重叠且间隔 ≥ 20min
         checkTimeConflict(dto.getHallId(), null, startAt, endAt);
@@ -472,14 +472,13 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
      * 校验同一影厅场次时间冲突：不可重叠，间隔 ≥ 20 分钟。
      */
     private void checkTimeConflict(Long hallId, Long excludeShowtimeId, LocalDateTime startAt, LocalDateTime endAt) {
-        LocalDateTime conflictStart = startAt.minusMinutes(20);
-        LocalDateTime conflictEnd = endAt.plusMinutes(20);
+        // startAt 预留 10 分钟清洁/入场间隔，endAt 在 createShowtime 中已包含清洁时间
 
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<Showtime>()
                 .eq(Showtime::getHallId, hallId)
                 .ne(Showtime::getStatus, ShowtimeStatus.SOLD_OUT_ALL)
-                .ge(Showtime::getEndAt, conflictStart)
-                .le(Showtime::getStartAt, conflictEnd);
+                .gt(Showtime::getEndAt, startAt)
+                .lt(Showtime::getStartAt, endAt);
         if (excludeShowtimeId != null) {
             wrapper.ne(Showtime::getId, excludeShowtimeId);
         }
@@ -546,7 +545,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
     private void initializeShowtimeSeats(Showtime showtime) {
         List<Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
-                .eq(Seat::getHallId, showtime.getHallId()));
+                .eq(Seat::getHallId, showtime.getHallId()));//获取物理实体座位的逻辑实体
         if (physicalSeats.isEmpty()) {
             return;
         }
@@ -554,7 +553,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         // 查已有库存
         List<ShowtimeSeat> existingInventories = showtimeSeatMapper.selectList(
                 new LambdaQueryWrapper<ShowtimeSeat>()
-                        .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
+                        .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));//查询已有该影厅的座位库存列表
         Map<Long, ShowtimeSeat> existingBySeatId = existingInventories.stream()
                 .collect(Collectors.toMap(ShowtimeSeat::getSeatId, seat -> seat));
 
@@ -569,7 +568,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
                 inventory.setShowtimeId(showtime.getId());
                 inventory.setSeatId(physicalSeat.getId());
                 inventory.setPrice(showtime.getBasePrice());
-                inventory.setStatus(inventoryStatus(physicalSeat));
+                inventory.setStatus(inventoryStatus(physicalSeat));//初始化库存座位的状态不可用/普通坐/情侣座
                 inventory.setVersion(0);
                 toInsert.add(inventory);
             } else {
@@ -599,10 +598,10 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
     private static int inventoryStatus(Seat seat) {
         if (seat.getStatus() != null && seat.getStatus() == 1) {
-            return INVENTORY_UNAVAILABLE;
+            return INVENTORY_UNAVAILABLE;//不可选状态
         }
         return seat.getSeatType() != null && seat.getSeatType() == 1
-                ? INVENTORY_COUPLE : INVENTORY_AVAILABLE;
+                ? INVENTORY_COUPLE : INVENTORY_AVAILABLE;//情侣座或者普通坐
     }
 
     private static String inventoryStatusName(int status) {
