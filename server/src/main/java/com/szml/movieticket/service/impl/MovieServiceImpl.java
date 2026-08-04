@@ -238,12 +238,12 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
                         .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
         vo.setShowtimeCount(todayShortimes.size());
 
-        Set<Long> cinemaIds = new HashSet<>();
-        for (Showtime st : todayShortimes) {
-            Hall hall = hallMapper.selectById(st.getHallId());
-            if (hall != null) cinemaIds.add(hall.getCinemaId());
-        }
-        vo.setCinemaCount(cinemaIds.size());
+//        Set<Long> cinemaIds = new HashSet<>();
+//        for (Showtime st : todayShortimes) {
+//            Hall hall = hallMapper.selectById(st.getHallId());
+//            if (hall != null) cinemaIds.add(hall.getCinemaId());
+//        }
+//        vo.setCinemaCount(cinemaIds.size());
         return vo;
     }
 
