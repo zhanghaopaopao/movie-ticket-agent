@@ -44,6 +44,11 @@ public interface MovieService extends IService<Movie> {
     void updateMovieStatus(Long id, MovieStatusDTO dto);
 
     /**
+     * 删除影片（有关联场次时不允许删除）。
+     */
+    void deleteMovie(Long id);
+
+    /**
      * C端分页查询影片列表（含 showtimeCount、cinemaCount 统计）。
      */
     MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword,

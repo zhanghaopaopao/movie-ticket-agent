@@ -78,4 +78,14 @@ public class MovieController {
         movieService.updateMovieStatus(id, dto);
         return Result.success();
     }
+
+    /**
+     * 删除影片（有关联场次时不允许删除）。
+     */
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteMovie(@PathVariable Long id) {
+        log.info("删除影片, 影片ID: {}", id);
+        movieService.deleteMovie(id);
+        return Result.success();
+    }
 }

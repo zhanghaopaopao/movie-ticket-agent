@@ -49,6 +49,7 @@ public enum ErrorCode {
     MOVIE_RELEASE_DATE_PAST(2006, "热映中的影片上映日期不能晚于今天"),
     MOVIE_RELEASE_DATE_FUTURE(2007, "待上映的影片上映日期必须在今天之后"),
     MOVIE_RELEASE_DATE_AFTER_SHOWTIME(2008, "该影片存在早于新上映日期的场次，不可修改"),
+    MOVIE_HAS_ASSOCIATED_SHOWTIMES(2009, "该影片已关联场次，不可删除"),
 
     // ---- 影院（3000-3999）----
 

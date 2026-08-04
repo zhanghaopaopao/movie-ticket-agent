@@ -195,6 +195,23 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
+    public void deleteMovie(Long id) {
+        Movie movie = getById(id);
+        if (movie == null) {
+            throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
+        }
+
+        long showtimeCount = showtimeMapper.selectCount(
+                new LambdaQueryWrapper<Showtime>().eq(Showtime::getMovieId, id));
+        if (showtimeCount > 0) {
+            throw new MovieException(ErrorCode.MOVIE_HAS_ASSOCIATED_SHOWTIMES);
+        }
+
+        removeById(id);
+        log.info("影片删除成功, id: {}, name: {}", id, movie.getName());
+    }
+
+    @Override
     public MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword,
                                          String sortBy, String sortOrder) {
         LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
