@@ -41,7 +41,7 @@ public class ShowtimeUserController {
     @GetMapping("/{id}/seats")
     public Result<ShowtimeSeatLayoutVO> seats(@PathVariable Long id) {
         log.info("C端查询座位图, 场次ID: {}", id);
-        ShowtimeSeatLayoutVO showtimeSeatLayoutVO = showtimeService.getSeatLayout(id);
+        ShowtimeSeatLayoutVO showtimeSeatLayoutVO = showtimeService.getSeatLayoutForUser(id);
         return Result.success(showtimeSeatLayoutVO);
     }
 }

@@ -21,15 +21,15 @@ public interface OrderTicketService {
      */
     LockResultVO lockSeats(Long userId, Long showtimeId, java.util.List<Long> seatIds, Integer draftVersion);
 
-    /**
-     * 模拟支付。
-     *
-     * @param userId         用户ID
-     * @param orderId        订单ID
-     * @param idempotencyKey 幂等键
-     * @return 支付结果
-     */
-    PayResultVO pay(Long userId, Long orderId, String idempotencyKey);
+    /** 创建支付宝 WAP 支付交易。 */
+    PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey);
+
+    /** 处理支付宝验签后的成功通知。方法必须具备幂等性。 */
+    void handleAlipaySuccess(String outTradeNo, String tradeNo, java.math.BigDecimal totalAmount,
+                             String notifyTime);
+
+    /** 记录支付宝已关闭交易，不改变订单和座位状态。 */
+    void handleAlipayClosed(String outTradeNo, String notifyTime);
 
     /**
      * 取消订单。

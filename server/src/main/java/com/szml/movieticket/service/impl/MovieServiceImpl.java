@@ -9,6 +9,7 @@ import com.szml.movieticket.dto.MovieUpdateDTO;
 import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Movie;
 import com.szml.movieticket.entity.Showtime;
+import com.szml.movieticket.entity.UserMovieWishlist;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.enums.MovieStatus;
 import com.szml.movieticket.enums.ShowtimeStatus;
@@ -17,6 +18,7 @@ import com.szml.movieticket.mapper.CinemaMapper;
 import com.szml.movieticket.mapper.HallMapper;
 import com.szml.movieticket.mapper.MovieMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
+import com.szml.movieticket.mapper.UserMovieWishlistMapper;
 import com.szml.movieticket.service.MovieService;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
@@ -47,6 +49,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     private final ShowtimeMapper showtimeMapper;
     private final CinemaMapper cinemaMapper;
     private final HallMapper hallMapper;
+    private final UserMovieWishlistMapper wishlistMapper;
 
     @Override
     public MoviePageVO pageMovies(int page, int size, String keyword, String status) {
@@ -175,7 +178,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
-    public MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword,
+    public MoviePageVO listMoviesForUser(Long userId, int page, int size, String status, String genre, String keyword,
                                          String sortBy, String sortOrder) {
         LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(status)) {
@@ -192,6 +195,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
         List<MovieVO> records = pageResult.getRecords().stream()
                 .map(this::toVO).collect(Collectors.toList());
+        markWanted(userId, records);
 
         MoviePageVO pageVO = new MoviePageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -217,12 +221,29 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
-    public MovieVO getMovieDetailForUser(Long id) {
+    public MovieVO getMovieDetailForUser(Long userId, Long id) {
         Movie movie = getById(id);
         if (movie == null) {
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
         }
-        return toVO(movie);
+        MovieVO vo = toVO(movie);
+        vo.setWanted(wishlistMapper.selectCount(new LambdaQueryWrapper<UserMovieWishlist>()
+                .eq(UserMovieWishlist::getUserId, userId)
+                .eq(UserMovieWishlist::getMovieId, id)) > 0);
+        return vo;
+    }
+
+    private void markWanted(Long userId, List<MovieVO> movies) {
+        if (movies.isEmpty()) return;
+        List<Long> movieIds = movies.stream().map(MovieVO::getId).toList();
+        Set<Long> wantedMovieIds = wishlistMapper.selectList(
+                new LambdaQueryWrapper<UserMovieWishlist>()
+                        .eq(UserMovieWishlist::getUserId, userId)
+                        .in(UserMovieWishlist::getMovieId, movieIds))
+                .stream()
+                .map(UserMovieWishlist::getMovieId)
+                .collect(Collectors.toSet());
+        movies.forEach(movie -> movie.setWanted(wantedMovieIds.contains(movie.getId())));
     }
 
     private LambdaQueryWrapper<Movie> buildQueryWrapper(String keyword, String status) {

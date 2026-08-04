@@ -3,6 +3,7 @@ package com.szml.movieticket.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.szml.movieticket.entity.TicketOrder;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * 订单 Mapper。
@@ -12,4 +13,7 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface OrderMapper extends BaseMapper<TicketOrder> {
+
+    @Select("SELECT * FROM orders WHERE id = #{orderId} FOR UPDATE")
+    TicketOrder selectForUpdate(Long orderId);
 }

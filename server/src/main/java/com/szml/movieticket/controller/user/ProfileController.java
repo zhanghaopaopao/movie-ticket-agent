@@ -3,6 +3,9 @@ package com.szml.movieticket.controller.user;
 import com.szml.movieticket.context.UserContext;
 import com.szml.movieticket.dto.PasswordChangeDTO;
 import com.szml.movieticket.dto.PreferenceSaveDTO;
+import com.szml.movieticket.dto.NewEmailCodeDTO;
+import com.szml.movieticket.dto.EmailChangeDTO;
+import com.szml.movieticket.dto.UploadResultDTO;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.UserProfileService;
 import com.szml.movieticket.vo.UserProfileVO;
@@ -10,6 +13,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 个人中心接口（C 端）。
@@ -48,13 +53,40 @@ public class ProfileController {
     }
 
     /**
+     * 上传并更新当前用户头像。
+     */
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<UploadResultDTO> updateAvatar(@RequestParam("file") MultipartFile file) {
+        return Result.success(userProfileService.updateAvatar(UserContext.getUserId(), file));
+    }
+
+    /**
      * 修改密码。
      */
     @PutMapping("/password")
     public Result<Void> changePassword(@Valid @RequestBody PasswordChangeDTO dto) {
         Long userId = UserContext.getUserId();
         log.info("修改密码, 用户ID: {}", userId);
-        userProfileService.changePassword(userId, dto.getOldPassword(), dto.getNewPassword());
+        userProfileService.changePassword(userId, dto.getOldPassword(), dto.getEmailCode(), dto.getNewPassword());
+        return Result.success();
+    }
+
+    @PostMapping("/security/code")
+    public Result<Void> sendSecurityCode() {
+        userProfileService.sendCurrentEmailCode(UserContext.getUserId());
+        return Result.success();
+    }
+
+    @PostMapping("/email/code")
+    public Result<Void> sendNewEmailCode(@Valid @RequestBody NewEmailCodeDTO dto) {
+        userProfileService.sendNewEmailCode(UserContext.getUserId(), dto.getNewEmail());
+        return Result.success();
+    }
+
+    @PutMapping("/email")
+    public Result<Void> changeEmail(@Valid @RequestBody EmailChangeDTO dto) {
+        userProfileService.changeEmail(UserContext.getUserId(), dto.getCurrentEmailCode(),
+                dto.getNewEmail(), dto.getNewEmailCode());
         return Result.success();
     }
 }
