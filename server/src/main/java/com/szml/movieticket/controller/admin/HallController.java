@@ -1,6 +1,7 @@
 package com.szml.movieticket.controller.admin;
 
 import com.szml.movieticket.dto.HallCreateDTO;
+import com.szml.movieticket.dto.HallStatusDTO;
 import com.szml.movieticket.dto.HallUpdateDTO;
 import com.szml.movieticket.dto.SeatCreateDTO;
 import com.szml.movieticket.dto.SeatLayoutSaveDTO;
@@ -46,20 +47,30 @@ public class HallController {
      * 新增影厅。
      */
     @PostMapping("/api/admin/halls")
-    public Result<HallVO> create(@Valid @RequestBody HallCreateDTO dto) {
+    public Result<Void> create(@Valid @RequestBody HallCreateDTO dto) {
         log.info("新增影厅, 影厅名称: {}, 影院ID: {}", dto.getName(), dto.getCinemaId());
-        HallVO hallVO = hallService.createHall(dto);
-        return Result.success(hallVO);
+        hallService.createHall(dto);
+        return Result.success();
     }
 
     /**
      * 编辑影厅。
      */
     @PutMapping("/api/admin/halls/{id}")
-    public Result<HallVO> update(@PathVariable Long id, @RequestBody HallUpdateDTO dto) {
+    public Result<Void> update(@PathVariable Long id, @RequestBody HallUpdateDTO dto) {
         log.info("编辑影厅, 影厅ID: {}", id);
-        HallVO hallVO = hallService.updateHall(id, dto);
-        return Result.success(hallVO);
+        hallService.updateHall(id, dto);
+        return Result.success();
+    }
+
+    /**
+     * 启停影厅。
+     */
+    @PutMapping("/api/admin/halls/{id}/status")
+    public Result<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody HallStatusDTO dto) {
+        log.info("变更影厅状态, 影厅ID: {}, 目标状态: {}", id, dto.getStatus());
+        hallService.updateHallStatus(id, dto);
+        return Result.success();
     }
 
     /**

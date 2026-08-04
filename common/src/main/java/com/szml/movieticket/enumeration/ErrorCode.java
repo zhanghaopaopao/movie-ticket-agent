@@ -61,6 +61,7 @@ public enum ErrorCode {
 
     HALL_NOT_FOUND(4000, "影厅不存在"),
     HALL_NAME_DUPLICATE(4001, "该影院下已存在同名影厅"),
+    HALL_HAS_ACTIVE_SHOWTIMES(4002, "该影厅存在在售场次，不可停用"),
 
     // ---- 座位（4100-4199）----
 

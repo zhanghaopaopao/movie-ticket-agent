@@ -3,6 +3,7 @@ package com.szml.movieticket.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.szml.movieticket.enums.HallStatus;
 import com.szml.movieticket.enums.HallType;
 import lombok.Data;
 
@@ -29,6 +30,9 @@ public class Hall {
 
     /** 厅型 */
     private HallType hallType;
+
+    /** 状态：0=停用 1=启用 */
+    private HallStatus status;
 
     /** 创建时间 */
     private LocalDateTime createTime;

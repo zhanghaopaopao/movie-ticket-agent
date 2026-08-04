@@ -2,6 +2,7 @@ package com.szml.movieticket.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.szml.movieticket.dto.HallCreateDTO;
+import com.szml.movieticket.dto.HallStatusDTO;
 import com.szml.movieticket.dto.HallUpdateDTO;
 import com.szml.movieticket.dto.SeatCreateDTO;
 import com.szml.movieticket.dto.SeatLayoutSaveDTO;
@@ -28,12 +29,17 @@ public interface HallService extends IService<Hall> {
     /**
      * 新增影厅。
      */
-    HallVO createHall(HallCreateDTO dto);
+    void createHall(HallCreateDTO dto);
 
     /**
      * 编辑影厅。
      */
-    HallVO updateHall(Long id, HallUpdateDTO dto);
+    void updateHall(Long id, HallUpdateDTO dto);
+
+    /**
+     * 启停影厅。
+     */
+    void updateHallStatus(Long id, HallStatusDTO dto);
 
     /**
      * 查询影厅座位布局。

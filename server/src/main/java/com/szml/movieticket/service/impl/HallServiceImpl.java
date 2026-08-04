@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.szml.movieticket.dto.HallCreateDTO;
+import com.szml.movieticket.dto.HallStatusDTO;
 import com.szml.movieticket.dto.HallUpdateDTO;
 import com.szml.movieticket.dto.SeatCreateDTO;
 import com.szml.movieticket.dto.SeatLayoutItemDTO;
@@ -14,6 +15,8 @@ import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Seat;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.entity.ShowtimeSeat;
+import com.szml.movieticket.enums.HallStatus;
+import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.exception.HallException;
 import com.szml.movieticket.exception.SeatException;
@@ -59,12 +62,13 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
     @Override
     public HallPageVO pageHallsByCinemaId(int page, int size, Long cinemaId, String keyword) {
+        //根据影院id以及关键字进行条件搜索
         LambdaQueryWrapper<Hall> wrapper = new LambdaQueryWrapper<Hall>()
                 .eq(Hall::getCinemaId, cinemaId);
         if (StringUtils.hasText(keyword)) {
-            wrapper.like(Hall::getName, keyword);
+            wrapper.like(Hall::getName, keyword);//模糊查询影厅名称
         }
-        wrapper.orderByAsc(Hall::getId);
+        wrapper.orderByAsc(Hall::getCreateTime);//根据创建时间进行降序排序
 
         Page<Hall> pageResult = page(new Page<>(page, size), wrapper);
         List<HallVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
@@ -78,7 +82,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     }
 
     @Override
-    public HallVO createHall(HallCreateDTO dto) {
+    public void createHall(HallCreateDTO dto) {
         // 同一影院下名称唯一
         long count = count(new LambdaQueryWrapper<Hall>()
                 .eq(Hall::getCinemaId, dto.getCinemaId())
@@ -89,14 +93,14 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
         Hall hall = new Hall();
         BeanUtils.copyProperties(dto, hall);
+        hall.setStatus(HallStatus.ACTIVE);
         save(hall);
 
         log.info("影厅新增成功, id: {}, name: {}, cinemaId: {}", hall.getId(), hall.getName(), hall.getCinemaId());
-        return toVO(hall);
     }
 
     @Override
-    public HallVO updateHall(Long id, HallUpdateDTO dto) {
+    public void updateHall(Long id, HallUpdateDTO dto) {
         Hall hall = getById(id);
         if (hall == null) {
             throw new HallException(ErrorCode.HALL_NOT_FOUND);
@@ -121,7 +125,29 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         updateById(hall);
 
         log.info("影厅编辑成功, id: {}, updatedFields: {}", id, updatedFields);
-        return toVO(hall);
+    }
+
+    @Override
+    public void updateHallStatus(Long id, HallStatusDTO dto) {
+        Hall hall = getById(id);
+        if (hall == null) {
+            throw new HallException(ErrorCode.HALL_NOT_FOUND);
+        }
+
+        if (dto.getStatus() == HallStatus.INACTIVE) {
+            long activeCount = showtimeMapper.selectCount(
+                    new LambdaQueryWrapper<Showtime>()
+                            .eq(Showtime::getHallId, id)
+                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+            if (activeCount > 0) {
+                throw new HallException(ErrorCode.HALL_HAS_ACTIVE_SHOWTIMES);
+            }
+        }
+
+        hall.setStatus(dto.getStatus());
+        updateById(hall);
+
+        log.info("影厅状态变更, id: {}, newStatus: {}", id, dto.getStatus());
     }
 
     @Override
@@ -334,6 +360,8 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         BeanUtils.copyProperties(hall, vo);
         vo.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
         vo.setHallTypeDesc(hall.getHallType() != null ? hall.getHallType().getDesc() : null);
+        vo.setStatus(hall.getStatus() != null ? hall.getStatus().getCode() : null);
+        vo.setStatusDesc(hall.getStatus() != null ? hall.getStatus().getDesc() : null);
         // 统计座位数
         long seatCount = seatMapper.selectCount(new LambdaQueryWrapper<Seat>().eq(Seat::getHallId, hall.getId()));
         vo.setTotalSeats((int) seatCount);
