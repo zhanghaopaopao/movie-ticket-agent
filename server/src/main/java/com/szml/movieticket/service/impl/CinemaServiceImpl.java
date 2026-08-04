@@ -46,7 +46,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
     @Override
     public CinemaPageVO pageCinemas(int page, int size, String keyword, String district, Integer status) {
         LambdaQueryWrapper<Cinema> wrapper = buildQueryWrapper(keyword, district, status);//根据相应条件构建查询条件
-        wrapper.orderByDesc(Cinema::getCreateTime);
+        wrapper.orderByDesc(Cinema::getCreateTime);//按照影院的创建时间进行倒序排序
 
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
         List<CinemaVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
@@ -238,7 +238,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
             wrapper.like(Cinema::getName, keyword);
         }
         if (StringUtils.hasText(district)) {
-            wrapper.eq(Cinema::getDistrict, district);
+            wrapper.like(Cinema::getDistrict, district);//所属商圈也按照模糊查询
         }
         if (status != null) {
             wrapper.eq(Cinema::getStatus, CinemaStatus.fromCode(status));
@@ -255,8 +255,9 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
 
         // 一次查询影厅，同时计算影厅数量、厅型列表、在售场次数
         List<Hall> halls = hallMapper.selectList(
-                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinema.getId()));
+                new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinema.getId()));//查询该影院的所有影厅实体列表
         vo.setHallCount(halls.size());
+        /* 去除冗余的查询
         vo.setHallTypes(halls.stream()
                 .map(h -> h.getHallType() != null ? h.getHallType().getCode() : null)
                 .filter(Objects::nonNull)
@@ -271,8 +272,10 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
                             .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));//查询在售场次逻辑
             vo.setShowtimeCount((int) showtimeCount);
         } else {
+
+         */
             vo.setShowtimeCount(0);
-        }
+//        }
 
         return vo;
     }
