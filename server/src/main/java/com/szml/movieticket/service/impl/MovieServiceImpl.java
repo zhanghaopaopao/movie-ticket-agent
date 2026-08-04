@@ -91,7 +91,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
-    public MovieVO updateMovie(Long id, MovieUpdateDTO dto) {
+    public void updateMovie(Long id, MovieUpdateDTO dto) {
         Movie movie = getById(id);
         if (movie == null) {
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
@@ -162,7 +162,6 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         updateById(movie);
 
         log.info("影片编辑成功, id: {}, updatedFields: {}", id, updatedFields);
-        return toVO(movie);
     }
 
     @Override

@@ -36,7 +36,7 @@ public interface MovieService extends IService<Movie> {
     /**
      * 编辑影片。
      */
-    MovieVO updateMovie(Long id, MovieUpdateDTO dto);
+    void updateMovie(Long id, MovieUpdateDTO dto);
 
     /**
      * 上下架影片。
