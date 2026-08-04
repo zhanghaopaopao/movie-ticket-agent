@@ -25,4 +25,9 @@ public interface ShowtimeSeatMapper extends BaseMapper<ShowtimeSeat> {
      */
     List<ShowtimeSeat> selectForUpdate(@Param("showtimeId") Long showtimeId,
                                        @Param("seatIds") List<Long> seatIds);
+
+    /**
+     * 批量插入场次座位库存。
+     */
+    int insertBatch(@Param("list") List<ShowtimeSeat> list);
 }

@@ -16,4 +16,13 @@
         FOR UPDATE
     </select>
 
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO showtime_seat (showtime_id, seat_id, price, status, version)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.showtimeId}, #{item.seatId}, #{item.price}, #{item.status}, #{item.version})
+        </foreach>
+    </insert>
+
+
 </mapper>
