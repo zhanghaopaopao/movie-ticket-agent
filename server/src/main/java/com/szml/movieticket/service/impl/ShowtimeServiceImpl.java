@@ -42,9 +42,12 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -104,7 +107,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         wrapper.orderByAsc(Showtime::getStartAt);
 
         Page<Showtime> pageResult = page(new Page<>(page, size), wrapper);
-        List<ShowtimeVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<ShowtimeVO> records = buildShowtimeVOList(pageResult.getRecords());
 
         ShowtimePageVO pageVO = new ShowtimePageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -518,6 +521,122 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (count > 0) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_TIME_CONFLICT);
         }
+    }
+
+    private List<ShowtimeVO> buildShowtimeVOList(List<Showtime> showtimes) {
+        if (showtimes.isEmpty()) {
+            return List.of();
+        }
+
+        // 收集 IDs
+        Set<Long> movieIds = new HashSet<>();
+        Set<Long> hallIds = new HashSet<>();
+        Set<Long> showtimeIds = new HashSet<>();
+        for (Showtime s : showtimes) {
+            movieIds.add(s.getMovieId());
+            hallIds.add(s.getHallId());
+            showtimeIds.add(s.getId());
+        }
+
+        // 1. 批量查 Movie
+        Map<Long, Movie> movieMap = new HashMap<>();
+        if (!movieIds.isEmpty()) {
+            movieMapper.selectBatchIds(movieIds)
+                    .forEach(m -> movieMap.put(m.getId(), m));
+        }
+
+        // 2. 批量查 Hall
+        Map<Long, Hall> hallMap = new HashMap<>();
+        if (!hallIds.isEmpty()) {
+            hallMapper.selectBatchIds(hallIds)
+                    .forEach(h -> hallMap.put(h.getId(), h));
+        }
+
+        // 3. 批量查 Cinema
+        Set<Long> cinemaIds = new HashSet<>();
+        for (Hall h : hallMap.values()) {
+            cinemaIds.add(h.getCinemaId());
+        }
+        Map<Long, Cinema> cinemaMap = new HashMap<>();
+        if (!cinemaIds.isEmpty()) {
+            cinemaMapper.selectBatchIds(cinemaIds)
+                    .forEach(c -> cinemaMap.put(c.getId(), c));
+        }
+
+        // 4. 批量查座位数
+        Map<Long, Integer> seatCountMap = new HashMap<>();
+        if (!hallIds.isEmpty()) {
+            List<Seat> allSeats = seatMapper.selectList(
+                    new LambdaQueryWrapper<Seat>().in(Seat::getHallId, hallIds));
+            for (Seat seat : allSeats) {
+                seatCountMap.merge(seat.getHallId(), 1, Integer::sum);
+            }
+        }
+
+        // 5. 批量查库存
+        Map<Long, List<ShowtimeSeat>> inventoryMap = new HashMap<>();
+        if (!showtimeIds.isEmpty()) {
+            List<ShowtimeSeat> allInventories = showtimeSeatMapper.selectList(
+                    new LambdaQueryWrapper<ShowtimeSeat>().in(ShowtimeSeat::getShowtimeId, showtimeIds));
+            for (ShowtimeSeat inv : allInventories) {
+                inventoryMap.computeIfAbsent(inv.getShowtimeId(), k -> new ArrayList<>()).add(inv);
+            }
+        }
+
+        // 6. 兜底初始化缺失库存的场次
+        for (Showtime s : showtimes) {
+            int totalSeats = seatCountMap.getOrDefault(s.getHallId(), 0);
+            if (inventoryMap.getOrDefault(s.getId(), List.of()).isEmpty() && totalSeats > 0) {
+                initializeShowtimeSeats(s);
+                List<ShowtimeSeat> reloaded = showtimeSeatMapper.selectList(
+                        new LambdaQueryWrapper<ShowtimeSeat>().eq(ShowtimeSeat::getShowtimeId, s.getId()));
+                inventoryMap.put(s.getId(), reloaded);
+            }
+        }
+
+        // 7. 组装
+        return showtimes.stream().map(s -> {
+            ShowtimeVO vo = new ShowtimeVO();
+            BeanUtils.copyProperties(s, vo);
+
+            Movie movie = movieMap.get(s.getMovieId());
+            if (movie != null) {
+                ShowtimeVO.MovieBriefVO mb = new ShowtimeVO.MovieBriefVO();
+                mb.setId(movie.getId());
+                mb.setName(movie.getName());
+                vo.setMovie(mb);
+            }
+
+            Hall hall = hallMap.get(s.getHallId());
+            if (hall != null) {
+                ShowtimeVO.HallBriefVO hb = new ShowtimeVO.HallBriefVO();
+                hb.setId(hall.getId());
+                hb.setName(hall.getName());
+                hb.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
+                vo.setHall(hb);
+
+                Cinema cinema = cinemaMap.get(hall.getCinemaId());
+                if (cinema != null) {
+                    ShowtimeVO.CinemaBriefVO cb = new ShowtimeVO.CinemaBriefVO();
+                    cb.setId(cinema.getId());
+                    cb.setName(cinema.getName());
+                    vo.setCinema(cb);
+                }
+            }
+
+            vo.setStatus(s.getStatus() != null ? s.getStatus().getCode() : null);
+            vo.setStatusDesc(s.getStatus() != null ? s.getStatus().getDesc() : null);
+
+            int totalSeats = seatCountMap.getOrDefault(s.getHallId(), 0);
+            vo.setTotalSeats(totalSeats);
+
+            List<ShowtimeSeat> inventories = inventoryMap.getOrDefault(s.getId(), List.of());
+            vo.setSoldSeats((int) inventories.stream()
+                    .filter(seat -> seat.getStatus() != null && seat.getStatus() == INVENTORY_SOLD)
+                    .count());
+
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     private ShowtimeVO toVO(Showtime showtime) {
