@@ -48,10 +48,10 @@ public class MovieVO {
     /** 上映日期 */
     private LocalDate releaseDate;
 
-    /** 当日在售场次数 */
+    /** 关联在售场次数 */
     private Integer showtimeCount;
 
-    /** 当日覆盖影院数 */
+    /** 关联覆盖影院数 */
     private Integer cinemaCount;
 
     /** 创建时间 */

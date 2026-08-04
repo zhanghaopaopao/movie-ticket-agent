@@ -241,18 +241,15 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         vo.setStatus(movie.getStatus() != null ? movie.getStatus().getCode() : null);
         vo.setStatusDesc(movie.getStatus() != null ? movie.getStatus().getDesc() : null);
 
-        // 当日在售场次和覆盖影院数
-        LocalDate today = LocalDate.now();
-        List<Showtime> todayShortimes = showtimeMapper.selectList(
+        // 关联在售场次和覆盖影院数
+        List<Showtime> activeShowtimes = showtimeMapper.selectList(
                 new LambdaQueryWrapper<Showtime>()
                         .eq(Showtime::getMovieId, movie.getId())
-                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
-                        .ge(Showtime::getStartAt, today.atStartOfDay())
-                        .lt(Showtime::getStartAt, today.plusDays(1).atStartOfDay()));
-        vo.setShowtimeCount(todayShortimes.size());
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+        vo.setShowtimeCount(activeShowtimes.size());
 
 //        Set<Long> cinemaIds = new HashSet<>();
-//        for (Showtime st : todayShortimes) {
+//        for (Showtime st : activeShowtimes) {
 //            Hall hall = hallMapper.selectById(st.getHallId());
 //            if (hall != null) cinemaIds.add(hall.getCinemaId());
 //        }
