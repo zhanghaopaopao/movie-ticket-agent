@@ -1,5 +1,6 @@
 package com.szml.movieticket.controller.user;
 
+import com.szml.movieticket.context.UserContext;
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.MovieService;
 import com.szml.movieticket.vo.MoviePageVO;
@@ -36,7 +37,7 @@ public class MovieUserController {
         log.info("C端查询影片列表, 页码: {}, 每页条数: {}, 上映状态: {}, 影片类型: {}, 搜索关键词: {}, 排序字段: {}, 排序方向: {}",
                 page, size, status, genre, keyword, sortBy, sortOrder);
         MoviePageVO moviePageVO = movieService.listMoviesForUser(
-                page, size, status, genre, keyword, sortBy, sortOrder);
+                UserContext.getUserId(), page, size, status, genre, keyword, sortBy, sortOrder);
         return Result.success(moviePageVO);
     }
 
@@ -46,7 +47,7 @@ public class MovieUserController {
     @GetMapping("/{id}")
     public Result<MovieVO> detail(@PathVariable Long id) {
         log.info("C端查询影片详情, 影片ID: {}", id);
-        MovieVO movieVO = movieService.getMovieDetailForUser(id);
+        MovieVO movieVO = movieService.getMovieDetailForUser(UserContext.getUserId(), id);
         return Result.success(movieVO);
     }
 }

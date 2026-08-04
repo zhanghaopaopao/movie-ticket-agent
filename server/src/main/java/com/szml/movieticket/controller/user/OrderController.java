@@ -37,14 +37,14 @@ public class OrderController {
     }
 
     /**
-     * 模拟支付。
+     * 创建支付宝沙箱 WAP 支付。
      */
     @PostMapping("/{id}/pay")
-    public Result<PayResultVO> pay(@PathVariable Long id, @Valid @RequestBody PayDTO dto) {
+    public Result<PaymentInitVO> pay(@PathVariable Long id, @Valid @RequestBody PayDTO dto) {
         Long userId = UserContext.getUserId();
         log.info("支付请求, 用户ID: {}, 订单ID: {}", userId, id);
-        PayResultVO payResultVO = orderTicketService.pay(userId, id, dto.getIdempotencyKey());
-        return Result.success(payResultVO);
+        PaymentInitVO result = orderTicketService.createPayment(userId, id, dto.getIdempotencyKey());
+        return Result.success(result);
     }
 
     /**

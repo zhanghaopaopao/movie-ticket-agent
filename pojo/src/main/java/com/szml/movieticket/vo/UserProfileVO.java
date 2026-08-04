@@ -15,6 +15,8 @@ public class UserProfileVO {
 
     private String email;
 
+    private String avatarUrl;
+
     /** 统计 */
     private UserStats stats;
 

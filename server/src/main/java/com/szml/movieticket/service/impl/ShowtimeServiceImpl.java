@@ -357,8 +357,21 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     }
 
     @Override
+    public ShowtimeSeatLayoutVO getSeatLayoutForUser(Long showtimeId) {
+        Showtime showtime = getById(showtimeId);
+        if (showtime == null) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        if (showtime.getStartAt() == null || !showtime.getStartAt().isAfter(LocalDateTime.now())) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_ALREADY_STARTED);
+        }
+        return getSeatLayout(showtimeId);
+    }
+
+    @Override
     public ShowtimeGroupedVO listShowtimesForUser(Long movieId, Long cinemaId, String date, String hallType) {
-        LocalDateTime startDate = LocalDateTime.now().toLocalDate().atStartOfDay();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startDate = now.toLocalDate().atStartOfDay();
         LocalDateTime endDate = startDate.plusDays(1);
         if (StringUtils.hasText(date)) {
             startDate = LocalDateTime.parse(date + "T00:00:00");
@@ -387,8 +400,9 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             }
             wrapper.in(Showtime::getHallId, hallIds);
         }
+        LocalDateTime effectiveStart = startDate.isAfter(now) ? startDate : now;
         wrapper.eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
-                .ge(Showtime::getStartAt, startDate)
+                .gt(Showtime::getStartAt, effectiveStart)
                 .le(Showtime::getStartAt, endDate);
 
         if (StringUtils.hasText(hallType)) {

@@ -11,6 +11,7 @@ import com.szml.movieticket.enums.UserStatus;
 import com.szml.movieticket.vo.LoginVO;
 import com.szml.movieticket.mapper.UserMapper;
 import com.szml.movieticket.service.AuthService;
+import com.szml.movieticket.service.EmailCodeService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +52,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
-    private final JavaMailSender mailSender;
+    private final EmailCodeService emailCodeService;
 
     @Override
     public LoginVO login(String phone, String password) {
@@ -86,16 +87,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             throw new AuthException(ErrorCode.AUTH_ACCOUNT_DISABLED);
         }
 
-        // 校验验证码
-        String redisKey = REDIS_KEY_PREFIX + email + ":2";
-        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
-        if (storedHash == null || !storedHash.equals(sha256(code))) {
-            log.warn("邮箱验证码登录失败，验证码错误, email: {}", email);
-            throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
-        }
-
-        // 验证码一次性消费
-        stringRedisTemplate.delete(redisKey);
+        emailCodeService.consumeCode(email, EmailCodeService.PURPOSE_EMAIL_LOGIN, code);
 
         return buildLoginVO(user);
     }
@@ -164,47 +156,12 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
     @Override
     public void sendEmailCode(String email, Integer purpose) {
-        String redisKey = REDIS_KEY_PREFIX + email + ":" + purpose;
-
-        String existing = stringRedisTemplate.opsForValue().get(redisKey);
-        if (existing != null) {
-            Long remaining = stringRedisTemplate.getExpire(redisKey);//获取指定key的过期时间
-            long elapsed = CODE_TTL_SECONDS - remaining;
-            if (elapsed < CODE_RATE_LIMIT_SECONDS) {
-                log.warn("验证码发送频率超限, email: {}, purpose: {}", email, purpose);
-                throw new BusinessException(ErrorCode.EMAIL_CODE_RATE_LIMIT);
-            }
-        }
-
-        String code = generateCode();
-        String codeHash = sha256(code);
-        stringRedisTemplate.opsForValue().set(redisKey, codeHash, Duration.ofSeconds(CODE_TTL_SECONDS));
-
-        // 发送邮件
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("2571761868@qq.com");
-            message.setTo(email);
-            message.setSubject("电影票智能体 - 验证码");
-            message.setText("您的验证码是：" + code + "，10分钟内有效，请勿泄露。");
-            mailSender.send(message);
-            log.info("验证码邮件已发送, email: {}, purpose: {}", email, purposeDesc(purpose));
-        } catch (Exception e) {
-            log.error("验证码邮件发送失败, email: {}", email, e);
-            // 发送失败但验证码已存 Redis，开发环境可从日志查看
-            log.info("========== 验证码(邮件发送失败兜底) ==========");
-            log.info("邮箱: {}, 用途: {}, 验证码: {}", email, purposeDesc(purpose), code);
-            log.info("==========================================");
-        }
+        emailCodeService.sendCode(email, purpose);
     }
 
     @Override
     public void register(String phone, String email, String password, String code) {
-        String redisKey = REDIS_KEY_PREFIX + email + ":0";
-        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);//从redis中获取验证码
-        if (storedHash == null || !storedHash.equals(sha256(code))) {//解析验证码
-            throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
-        }
+        emailCodeService.consumeCode(email, EmailCodeService.PURPOSE_REGISTER, code);
 
         // 检查手机号、邮箱是否已存在
         long phoneCount = count(new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
@@ -225,18 +182,12 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         user.setStatus(UserStatus.ACTIVE);
         save(user);
 
-        stringRedisTemplate.delete(redisKey);
-
         log.info("用户注册成功, userId: {}, email: {}", user.getId(), email);
     }
 
     @Override
     public void resetPassword(String email, String code, String newPassword) {
-        String redisKey = REDIS_KEY_PREFIX + email + ":1";
-        String storedHash = stringRedisTemplate.opsForValue().get(redisKey);
-        if (storedHash == null || !storedHash.equals(sha256(code))) {
-            throw new AuthException(ErrorCode.EMAIL_CODE_INVALID);
-        }
+        emailCodeService.consumeCode(email, EmailCodeService.PURPOSE_RESET_PASSWORD, code);
 
         User user = getOne(new LambdaQueryWrapper<User>().eq(User::getEmail, email));
         if (user == null) {
@@ -245,8 +196,6 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         updateById(user);
-
-        stringRedisTemplate.delete(redisKey);
 
         log.info("密码重置成功, userId: {}, email: {}", user.getId(), email);
     }

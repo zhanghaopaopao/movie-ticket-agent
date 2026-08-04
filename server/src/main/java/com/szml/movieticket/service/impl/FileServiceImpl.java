@@ -45,6 +45,15 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public UploadResultDTO uploadImage(MultipartFile file) {
+        return uploadImage(file, "posters");
+    }
+
+    @Override
+    public UploadResultDTO uploadAvatar(MultipartFile file) {
+        return uploadImage(file, "avatars");
+    }
+
+    private UploadResultDTO uploadImage(MultipartFile file, String directory) {
         // 校验文件大小
         if (file.getSize() > MAX_FILE_SIZE) {
             log.warn("文件大小超限, size: {}, fileName: {}", file.getSize(), file.getOriginalFilename());
@@ -60,7 +69,8 @@ public class FileServiceImpl implements FileService {
         }
 
         // 生成 COS 存储路径
-        String cosKey = "posters/" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + "." + extension;
+        String cosKey = directory + "/" + System.currentTimeMillis() + "_"
+                + UUID.randomUUID().toString().substring(0, 8) + "." + extension.toLowerCase();
 
         try {
             // MultipartFile → 临时文件 → 上传 COS

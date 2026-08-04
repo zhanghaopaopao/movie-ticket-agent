@@ -33,7 +33,7 @@ public enum ErrorCode {
     AUTH_ACCOUNT_LOCKED(1003, "账号已被锁定，请稍后重试"),
     EMAIL_CODE_INVALID(1004, "验证码错误或已过期"),
     EMAIL_CODE_RATE_LIMIT(1005, "请60秒后再发送验证码"),
-    EMAIL_SEND_FAILED(1008, "验证码邮件发送失败，请稍后重试"),
+    EMAIL_SEND_FAILED(1010, "验证码邮件发送失败，请稍后重试"),
     USER_EMAIL_EXISTS(1006, "该邮箱已被注册"),
     USER_PHONE_EXISTS(1007, "该手机号已被注册"),
     USER_EMAIL_NOT_FOUND(1008, "该邮箱未注册"),
@@ -78,6 +78,7 @@ public enum ErrorCode {
     SHOWTIME_HAS_LOCKED_SEATS(5002, "该场次已有锁座或订单，不可修改时间"),
     SHOWTIME_SEAT_NOT_FOUND(5003, "场次座位不存在"),
     SHOWTIME_SEAT_STATUS_INVALID(5004, "场次座位状态不合法"),
+    SHOWTIME_ALREADY_STARTED(5005, "该场次已开始，无法继续选座"),
 
     // ---- 订单（6000-6999）----
 
@@ -86,6 +87,8 @@ public enum ErrorCode {
     ORDER_STATUS_INVALID(6002, "当前订单状态不允许此操作"),
     SEAT_LOCK_CONFLICT(6003, "座位已被锁定或售出"),
     PAYMENT_IDEMPOTENT_REPLAY(6004, "请勿重复支付"),
+    PAYMENT_NOT_CONFIGURED(6005, "支付宝沙箱支付尚未配置"),
+    PAYMENT_PROVIDER_ERROR(6006, "支付宝支付服务暂时不可用"),
 
     // ---- 草稿（7000-7999）----
 
@@ -100,7 +103,11 @@ public enum ErrorCode {
 
     // ---- 用户（9000-9999）----
 
-    USER_OLD_PASSWORD_WRONG(9000, "当前密码不正确");
+    USER_OLD_PASSWORD_WRONG(9000, "当前密码不正确"),
+    USER_EMAIL_REQUIRED(9001, "当前账号未绑定邮箱，请联系管理员"),
+    USER_EMAIL_SAME(9002, "新邮箱不能与当前邮箱相同"),
+    USER_CURRENT_EMAIL_CODE_INVALID(9003, "当前邮箱验证码错误或已过期"),
+    USER_NEW_EMAIL_CODE_INVALID(9004, "新邮箱验证码错误或已过期");
 
     private final int code;
     private final String message;

@@ -8,6 +8,7 @@ import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.OrderException;
 import com.szml.movieticket.mapper.*;
 import com.szml.movieticket.service.OrderTicketService;
+import com.szml.movieticket.service.AlipayPaymentService;
 import com.szml.movieticket.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,6 +76,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     private final HallMapper hallMapper;
     private final CinemaMapper cinemaMapper;
     private final PurchaseDraftMapper draftMapper;
+    private final AlipayPaymentService alipayPaymentService;
 
     @Override
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -87,6 +89,10 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         if (showtime.getStatus() != ShowtimeStatus.ON_SALE) {
             log.warn("场次不在售, showtimeId: {}, status: {}", showtimeId, showtime.getStatus());
             throw new OrderException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+        if (showtime.getStartAt() == null || !showtime.getStartAt().isAfter(LocalDateTime.now())) {
+            log.warn("场次已开始，拒绝锁座, showtimeId: {}, startAt: {}", showtimeId, showtime.getStartAt());
+            throw new OrderException(ErrorCode.SHOWTIME_ALREADY_STARTED);
         }
 
         // 校验草稿版本
@@ -220,8 +226,153 @@ public class OrderTicketServiceImpl implements OrderTicketService {
 
     @Override
     @Transactional
-    public PayResultVO pay(Long userId, Long orderId, String idempotencyKey) {
-        TicketOrder order = orderMapper.selectById(orderId);
+    public PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey) {
+        TicketOrder order = orderMapper.selectForUpdate(orderId);
+        if (order == null) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!order.getUserId().equals(userId)) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+
+        PaymentInitVO result = new PaymentInitVO();
+        result.setOrderId(orderId);
+        result.setOutTradeNo(order.getOrderNo());
+
+        // 已完成订单不再创建新的支付交易。
+        if ("PAID".equals(order.getStatus()) || "TICKETED".equals(order.getStatus())) {
+            result.setPaymentStatus("SUCCESS");
+            result.setPayForm("");
+            return result;
+        }
+
+        if (!"PAYMENT_PENDING".equals(order.getStatus())) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+        if (order.getExpiresAt() != null && order.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new OrderException(ErrorCode.ORDER_EXPIRED);
+        }
+
+        Showtime showtime = showtimeMapper.selectById(order.getShowtimeId());
+        Movie movie = showtime != null ? movieMapper.selectById(showtime.getMovieId()) : null;
+        Hall hall = showtime != null ? hallMapper.selectById(showtime.getHallId()) : null;
+        Cinema cinema = hall != null ? cinemaMapper.selectById(hall.getCinemaId()) : null;
+        String subject = (movie != null ? movie.getName() : "电影票")
+                + " - " + (cinema != null ? cinema.getName() : "影院");
+
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (payment == null) {
+            payment = new Payment();
+            payment.setOrderId(orderId);
+        }
+        String outTradeNo = payment.getOutTradeNo();
+        if ("FAIL".equals(payment.getStatus()) || "CLOSED".equals(payment.getStatus())) {
+            outTradeNo = order.getOrderNo() + "-" + System.currentTimeMillis();
+            payment.setTradeNo(null);
+        } else if (outTradeNo == null || outTradeNo.isBlank()) {
+            outTradeNo = order.getOrderNo();
+        }
+        payment.setProvider("ALIPAY_SANDBOX");
+        payment.setOutTradeNo(outTradeNo);
+        payment.setSubject(subject);
+        if (payment.getIdempotencyKey() == null || payment.getIdempotencyKey().isBlank()) {
+            payment.setIdempotencyKey(idempotencyKey);
+        }
+        payment.setStatus("PENDING");
+        payment.setAmount(order.getAmount());
+        payment.setProcessedAt(null);
+        payment.setNotifyTime(null);
+        if (payment.getId() == null) {
+            paymentMapper.insert(payment);
+        } else {
+            paymentMapper.updateById(payment);
+        }
+
+        String payForm = alipayPaymentService.createWapPayForm(outTradeNo, subject, order.getAmount());
+        result.setOutTradeNo(outTradeNo);
+        result.setPaymentStatus("PENDING");
+        result.setPayForm(payForm);
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void handleAlipaySuccess(String outTradeNo, String tradeNo, BigDecimal totalAmount,
+                                    String notifyTime) {
+        if (outTradeNo == null || outTradeNo.isBlank() || tradeNo == null || tradeNo.isBlank()) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOutTradeNo, outTradeNo)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (payment == null) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (payment.getAmount() == null) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+        BigDecimal expected = BigDecimal.valueOf(payment.getAmount(), 2);
+        if (totalAmount == null || expected.compareTo(totalAmount.setScale(2, RoundingMode.HALF_UP)) != 0) {
+            log.warn("支付宝通知金额不匹配, outTradeNo={}, expected={}, actual={}", outTradeNo, expected, totalAmount);
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+        TicketOrder order = orderMapper.selectForUpdate(payment.getOrderId());
+        if (order == null) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if ("TICKETED".equals(order.getStatus()) || "PAID".equals(order.getStatus())) {
+            payment.setTradeNo(tradeNo);
+            payment.setStatus("SUCCESS");
+            payment.setProcessedAt(payment.getProcessedAt() != null ? payment.getProcessedAt() : LocalDateTime.now());
+            payment.setNotifyTime(parseNotifyTime(notifyTime));
+            paymentMapper.updateById(payment);
+            return;
+        }
+        if (!"PAYMENT_PENDING".equals(order.getStatus())) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+
+        // 当前事务已持有订单行锁，重复通知不会重复出票。
+        completePaidOrder(order.getUserId(), order.getId(), "alipay-" + tradeNo);
+        Payment processed = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOrderId, order.getId())
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (processed != null) {
+            processed.setProvider("ALIPAY_SANDBOX");
+            processed.setOutTradeNo(outTradeNo);
+            processed.setTradeNo(tradeNo);
+            processed.setStatus("SUCCESS");
+            processed.setNotifyTime(parseNotifyTime(notifyTime));
+            paymentMapper.updateById(processed);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void handleAlipayClosed(String outTradeNo, String notifyTime) {
+        if (outTradeNo == null || outTradeNo.isBlank()) {
+            return;
+        }
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOutTradeNo, outTradeNo)
+                .last("LIMIT 1"));
+        if (payment != null && "PENDING".equals(payment.getStatus())) {
+            payment.setStatus("CLOSED");
+            payment.setNotifyTime(parseNotifyTime(notifyTime));
+            paymentMapper.updateById(payment);
+        }
+    }
+
+    /**
+     * 仅由支付宝验签后的成功通知调用，完成订单、座位和出票状态变更。
+     */
+    private PayResultVO completePaidOrder(Long userId, Long orderId, String idempotencyKey) {
+        TicketOrder order = orderMapper.selectForUpdate(orderId);
         if (order == null) {
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
         }
@@ -242,14 +393,24 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             throw new OrderException(ErrorCode.ORDER_EXPIRED);
         }
 
-        // 写支付记录
-        Payment payment = new Payment();
-        payment.setOrderId(orderId);
+        // 写入或更新支付记录。真正的成功状态由支付宝通知负责确认。
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (payment == null) {
+            payment = new Payment();
+            payment.setOrderId(orderId);
+        }
         payment.setIdempotencyKey(idempotencyKey);
         payment.setStatus("SUCCESS");
         payment.setAmount(order.getAmount());
         payment.setProcessedAt(LocalDateTime.now());
-        paymentMapper.insert(payment);
+        if (payment.getId() == null) {
+            paymentMapper.insert(payment);
+        } else {
+            paymentMapper.updateById(payment);
+        }
 
         // 订单 → PAID
         order.setStatus("PAID");
@@ -333,10 +494,21 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         return result;
     }
 
+    private static LocalDateTime parseNotifyTime(String value) {
+        if (value == null || value.isBlank()) {
+            return LocalDateTime.now();
+        }
+        try {
+            return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (RuntimeException ignored) {
+            return LocalDateTime.now();
+        }
+    }
+
     @Override
     @Transactional
     public void cancelOrder(Long userId, Long orderId) {
-        TicketOrder order = orderMapper.selectById(orderId);
+        TicketOrder order = orderMapper.selectForUpdate(orderId);
         if (order == null || !order.getUserId().equals(userId)) {
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
         }
@@ -365,6 +537,15 @@ public class OrderTicketServiceImpl implements OrderTicketService {
 
         order.setStatus("CANCELLED");
         orderMapper.updateById(order);
+
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (payment != null && "PENDING".equals(payment.getStatus())) {
+            payment.setStatus("CLOSED");
+            paymentMapper.updateById(payment);
+        }
 
         // 解冻草稿
         PurchaseDraft draft = draftMapper.selectOne(new LambdaQueryWrapper<PurchaseDraft>()
