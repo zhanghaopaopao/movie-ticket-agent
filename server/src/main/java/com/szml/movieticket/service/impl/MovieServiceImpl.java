@@ -29,8 +29,6 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -177,7 +175,8 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     }
 
     @Override
-    public MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword) {
+    public MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword,
+                                         String sortBy, String sortOrder) {
         LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(status)) {
             wrapper.eq(Movie::getStatus, MovieStatus.valueOf(status));
@@ -188,7 +187,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (StringUtils.hasText(keyword)) {
             wrapper.like(Movie::getName, keyword);
         }
-        wrapper.orderByDesc(Movie::getReleaseDate);
+        applyUserMovieSort(wrapper, sortBy, sortOrder);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
         List<MovieVO> records = pageResult.getRecords().stream()
@@ -200,6 +199,21 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         pageVO.setSize(size);
         pageVO.setRecords(records);
         return pageVO;
+    }
+
+    void applyUserMovieSort(LambdaQueryWrapper<Movie> wrapper, String sortBy, String sortOrder) {
+        boolean ascending = switch (sortOrder) {
+            case "asc" -> true;
+            case "desc" -> false;
+            default -> throw new MovieException(ErrorCode.PARAM_ERROR);
+        };
+
+        switch (sortBy) {
+            case "createTime" -> wrapper.orderBy(true, ascending, Movie::getCreateTime);
+            case "releaseDate" -> wrapper.orderBy(true, ascending, Movie::getReleaseDate);
+            case "rating" -> wrapper.orderBy(true, ascending, Movie::getRating);
+            default -> throw new MovieException(ErrorCode.PARAM_ERROR);
+        }
     }
 
     @Override

@@ -46,7 +46,8 @@ public interface MovieService extends IService<Movie> {
     /**
      * C端分页查询影片列表（含 showtimeCount、cinemaCount 统计）。
      */
-    MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword);
+    MoviePageVO listMoviesForUser(int page, int size, String status, String genre, String keyword,
+                                  String sortBy, String sortOrder);
 
     /**
      * C端影片详情（含 todayShowtimeCoverage）。
