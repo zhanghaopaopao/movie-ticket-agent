@@ -69,7 +69,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
     }
 
     @Override
-    public CinemaVO createCinema(CinemaCreateDTO dto) {
+    public void createCinema(CinemaCreateDTO dto) {
         long count = count(new LambdaQueryWrapper<Cinema>().eq(Cinema::getName, dto.getName()));
         if (count > 0) {
             throw new CinemaException(ErrorCode.CINEMA_NAME_DUPLICATE);
@@ -84,7 +84,6 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         save(cinema);
 
         log.info("影院新增成功, id: {}, name: {}", cinema.getId(), cinema.getName());
-        return toVO(cinema);
     }
 
     @Override

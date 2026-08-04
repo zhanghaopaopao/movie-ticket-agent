@@ -55,10 +55,10 @@ public class CinemaController {
      * 新增影院。
      */
     @PostMapping
-    public Result<CinemaVO> create(@Valid @RequestBody CinemaCreateDTO dto) {
+    public Result<Void> create(@Valid @RequestBody CinemaCreateDTO dto) {
         log.info("新增影院, 影院名称: {}", dto.getName());
-        CinemaVO cinemaVO = cinemaService.createCinema(dto);
-        return Result.success(cinemaVO);
+        cinemaService.createCinema(dto);
+        return Result.success();
     }
 
     /**

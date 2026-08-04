@@ -29,7 +29,7 @@ public interface CinemaService extends IService<Cinema> {
     /**
      * 新增影院。
      */
-    CinemaVO createCinema(CinemaCreateDTO dto);
+    void createCinema(CinemaCreateDTO dto);
 
     /**
      * 编辑影院。
