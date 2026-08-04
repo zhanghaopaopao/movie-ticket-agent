@@ -23,9 +23,9 @@ public class ShowtimeVO {
 
     /** 影厅 */
     private HallBriefVO hall;
-
+   /** 开场时间*/
     private LocalDateTime startAt;
-
+    /** 结束时间*/
     private LocalDateTime endAt;
 
     private Integer basePrice;

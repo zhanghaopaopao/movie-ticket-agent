@@ -44,9 +44,11 @@ public enum ErrorCode {
     MOVIE_NOT_FOUND(2000, "影片不存在"),
     MOVIE_NAME_DUPLICATE(2001, "影片名称已存在"),
     MOVIE_HAS_ACTIVE_SHOWTIMES(2002, "该影片存在在售场次，不可下架"),
-    MOVIE_STATUS_INVALID(2003, "新增影片不能选择已下架状态"),
-    MOVIE_RELEASE_DATE_PAST(2004, "热映中的影片上映日期不能晚于今天"),
-    MOVIE_RELEASE_DATE_FUTURE(2005, "待上映的影片上映日期必须在今天之后"),
+    MOVIE_DURATION_IMMUTABLE(2003, "该影片已关联场次，不可修改时长"),
+    MOVIE_STATUS_INVALID(2005, "新增影片不能选择已下架状态"),
+    MOVIE_RELEASE_DATE_PAST(2006, "热映中的影片上映日期不能晚于今天"),
+    MOVIE_RELEASE_DATE_FUTURE(2007, "待上映的影片上映日期必须在今天之后"),
+    MOVIE_RELEASE_DATE_AFTER_SHOWTIME(2008, "该影片存在早于新上映日期的场次，不可修改"),
 
     // ---- 影院（3000-3999）----
 

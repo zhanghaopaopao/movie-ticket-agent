@@ -107,12 +107,34 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         List<String> updatedFields = new ArrayList<>();
         if (StringUtils.hasText(dto.getName())) { movie.setName(dto.getName()); updatedFields.add("name"); }
         if (StringUtils.hasText(dto.getGenre())) { movie.setGenre(dto.getGenre()); updatedFields.add("genre"); }
-        if (dto.getDuration() != null) { movie.setDuration(dto.getDuration()); updatedFields.add("duration"); }
+        if (dto.getDuration() != null && !dto.getDuration().equals(movie.getDuration())) {
+            long showtimeCount = showtimeMapper.selectCount(
+                    new LambdaQueryWrapper<Showtime>().eq(Showtime::getMovieId, id));
+            if (showtimeCount > 0) {
+                throw new MovieException(ErrorCode.MOVIE_DURATION_IMMUTABLE);
+            }
+            movie.setDuration(dto.getDuration());
+            updatedFields.add("duration");
+        }
         if (dto.getRating() != null) { movie.setRating(dto.getRating()); updatedFields.add("rating"); }
         if (dto.getPoster() != null) { movie.setPoster(dto.getPoster()); updatedFields.add("poster"); }
         if (dto.getDescription() != null) { movie.setDescription(dto.getDescription()); updatedFields.add("description"); }
         if (dto.getCast() != null) { movie.setCast(dto.getCast()); updatedFields.add("cast"); }
-        if (dto.getReleaseDate() != null) { movie.setReleaseDate(dto.getReleaseDate()); updatedFields.add("releaseDate"); }
+        if (dto.getReleaseDate() != null && !dto.getReleaseDate().equals(movie.getReleaseDate())) {
+            // 有关联场次时，releaseDate 不能晚于最早在售场次日期
+            List<Showtime> showtimes = showtimeMapper.selectList(
+                    new LambdaQueryWrapper<Showtime>()
+                            .eq(Showtime::getMovieId, id)
+                            .orderByAsc(Showtime::getStartAt));
+            if (!showtimes.isEmpty()) {
+                LocalDate earliestShowtimeDate = showtimes.getFirst().getStartAt().toLocalDate();
+                if (dto.getReleaseDate().isAfter(earliestShowtimeDate)) {
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_AFTER_SHOWTIME);
+                }
+            }
+            movie.setReleaseDate(dto.getReleaseDate());
+            updatedFields.add("releaseDate");
+        }
         if (dto.getStatus() != null) {
             // 下架保护：只要有在售场次就不允许下架
             if (dto.getStatus() == MovieStatus.OFFLINE) {

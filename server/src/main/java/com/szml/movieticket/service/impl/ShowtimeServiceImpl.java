@@ -70,6 +70,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     @Override
     @Transactional
     public ShowtimePageVO pageShowtimes(int page, int size, Long movieId, Long cinemaId, String date, String status) {
+        //根据电影id,影院id,开场时间,以及场次状态进行查询相关列表
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<>();
         if (movieId != null) {
             wrapper.eq(Showtime::getMovieId, movieId);
@@ -77,19 +78,21 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (cinemaId != null) {
             // cinemaId 在 hall 表，需先查出该影院的所有影厅ID
             List<Hall> halls = hallMapper.selectList(new LambdaQueryWrapper<Hall>().eq(Hall::getCinemaId, cinemaId));
-            List<Long> hallIds = halls.stream().map(Hall::getId).collect(Collectors.toList());
+            List<Long> hallIds = halls.stream().map(Hall::getId).collect(Collectors.toList());//根据影院id查询出所有的影厅ids
             if (hallIds.isEmpty()) {
                 ShowtimePageVO empty = new ShowtimePageVO();
-                empty.setTotal(0); empty.setPage(page); empty.setSize(size);
+                empty.setTotal(0);
+                empty.setPage(page);
+                empty.setSize(size);
                 empty.setRecords(new ArrayList<>());
                 return empty;
             }
-            wrapper.in(Showtime::getHallId, hallIds);
+            wrapper.in(Showtime::getHallId, hallIds);//构建出影厅id的查询条件
         }
         if (StringUtils.hasText(date)) {
             LocalDateTime start = LocalDateTime.parse(date + "T00:00:00");
             LocalDateTime end = LocalDateTime.parse(date + "T23:59:59");
-            wrapper.between(Showtime::getStartAt, start, end);
+            wrapper.between(Showtime::getStartAt, start, end);//根据查询时间构造出查询条件
         }
         if (StringUtils.hasText(status)) {
             wrapper.eq(Showtime::getStatus, ShowtimeStatus.fromCode(Integer.parseInt(status)));
