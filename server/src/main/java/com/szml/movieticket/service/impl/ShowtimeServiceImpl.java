@@ -39,6 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -135,6 +136,12 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
         if (cinema != null && cinema.getStatus() == CinemaStatus.INACTIVE) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_CINEMA_INACTIVE);
+        }
+
+        // 只允许创建明天及之后的场次
+        LocalDateTime tomorrow = LocalDate.now().plusDays(1).atStartOfDay();
+        if (dto.getStartAt().isBefore(tomorrow)) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);
         }
 
         // 计算散场时间

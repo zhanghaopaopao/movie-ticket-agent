@@ -85,6 +85,7 @@ public enum ErrorCode {
     SHOWTIME_MOVIE_OFFLINE(5005, "已下架的影片不可排场次"),
     SHOWTIME_HALL_INACTIVE(5006, "已停用的影厅不可排场次"),
     SHOWTIME_CINEMA_INACTIVE(5007, "已停用的影院不可排场次"),
+    SHOWTIME_START_AT_TOO_EARLY(5008, "只可创建明天及之后的场次"),
 
     // ---- 订单（6000-6999）----
 
