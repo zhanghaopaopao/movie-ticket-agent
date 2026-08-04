@@ -73,9 +73,9 @@ public class MovieController {
      * 上下架影片。
      */
     @PutMapping("/{id}/status")
-    public Result<MovieVO> updateStatus(@PathVariable Long id, @Valid @RequestBody MovieStatusDTO dto) {
+    public Result<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody MovieStatusDTO dto) {
         log.info("变更影片状态, 影片ID: {}, 目标状态: {}", id, dto.getStatus());
-        MovieVO movieVO = movieService.updateMovieStatus(id, dto);
-        return Result.success(movieVO);
+        movieService.updateMovieStatus(id, dto);
+        return Result.success();
     }
 }

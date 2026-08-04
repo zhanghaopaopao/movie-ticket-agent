@@ -177,22 +177,16 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     }
 
     @Override
-    public ShowtimeVO updateShowtimeStatus(Long id, ShowtimeStatusDTO dto) {
+    public void updateShowtimeStatus(Long id, ShowtimeStatusDTO dto) {
         Showtime showtime = getById(id);
         if (showtime == null) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
-        }
-
-        if (dto.getStatus() == ShowtimeStatus.CANCELLED) {
-            // TODO: 校验是否存在已锁定座位
-            log.warn("场次取消操作，暂未校验已锁定座位, showtimeId: {}", id);
         }
 
         showtime.setStatus(dto.getStatus());
         updateById(showtime);
 
         log.info("场次状态变更, id: {}, newStatus: {}", id, dto.getStatus());
-        return toVO(showtime);
     }
 
     @Override
@@ -480,7 +474,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<Showtime>()
                 .eq(Showtime::getHallId, hallId)
-                .ne(Showtime::getStatus, ShowtimeStatus.CANCELLED)
+                .ne(Showtime::getStatus, ShowtimeStatus.SOLD_OUT_ALL)
                 .ge(Showtime::getEndAt, conflictStart)
                 .le(Showtime::getStartAt, conflictEnd);
         if (excludeShowtimeId != null) {

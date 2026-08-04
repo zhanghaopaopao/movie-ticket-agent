@@ -41,7 +41,7 @@ public interface MovieService extends IService<Movie> {
     /**
      * 上下架影片。
      */
-    MovieVO updateMovieStatus(Long id, MovieStatusDTO dto);
+    void updateMovieStatus(Long id, MovieStatusDTO dto);
 
     /**
      * C端分页查询影片列表（含 showtimeCount、cinemaCount 统计）。

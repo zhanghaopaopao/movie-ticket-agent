@@ -89,9 +89,9 @@ public class ShowtimeController {
      * 停售/取消场次。
      */
     @PutMapping("/{id}/status")
-    public Result<ShowtimeVO> updateStatus(@PathVariable Long id, @Valid @RequestBody ShowtimeStatusDTO dto) {
+    public Result<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody ShowtimeStatusDTO dto) {
         log.info("变更场次状态, 场次ID: {}, 目标状态: {}", id, dto.getStatus());
-        ShowtimeVO showtimeVO = showtimeService.updateShowtimeStatus(id, dto);
-        return Result.success(showtimeVO);
+        showtimeService.updateShowtimeStatus(id, dto);
+        return Result.success();
     }
 }

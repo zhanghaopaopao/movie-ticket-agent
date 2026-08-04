@@ -35,7 +35,7 @@ public class HallController {
     @GetMapping("/api/admin/cinemas/{cinemaId}/halls")
     public Result<HallPageVO> listByCinema(@PathVariable Long cinemaId,
                                            @RequestParam(defaultValue = "1") int page,
-                                           @RequestParam(defaultValue = "20") int size,
+                                           @RequestParam(defaultValue = "10") int size,
                                            @RequestParam(required = false) String keyword) {
         log.info("查询影厅列表, 影院ID: {}, 页码: {}, 每页条数: {}, 搜索关键词: {}", cinemaId, page, size, keyword);
         HallPageVO hallPageVO = hallService.pageHallsByCinemaId(page, size, cinemaId, keyword);

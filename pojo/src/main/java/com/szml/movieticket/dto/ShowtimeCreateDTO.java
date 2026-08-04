@@ -22,7 +22,7 @@ public class ShowtimeCreateDTO {
     private Long hallId;
 
     @NotNull(message = "开场时间不能为空")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime startAt;
 
     @NotNull(message = "基准票价不能为空")

@@ -36,9 +36,9 @@ public interface ShowtimeService extends IService<Showtime> {
     ShowtimeVO updateShowtime(Long id, ShowtimeUpdateDTO dto);
 
     /**
-     * 停售/取消场次。
+     * 停售/售罄场次。
      */
-    ShowtimeVO updateShowtimeStatus(Long id, ShowtimeStatusDTO dto);
+    void updateShowtimeStatus(Long id, ShowtimeStatusDTO dto);
 
     /**
      * 批量设置场次座位状态。

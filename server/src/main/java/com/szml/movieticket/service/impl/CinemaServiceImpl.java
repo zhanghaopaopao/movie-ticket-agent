@@ -117,7 +117,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
     }
 
     @Override
-    public CinemaVO updateCinemaStatus(Long id, CinemaStatusDTO dto) {
+    public void updateCinemaStatus(Long id, CinemaStatusDTO dto) {
         Cinema cinema = getById(id);
         if (cinema == null) {
             throw new CinemaException(ErrorCode.CINEMA_NOT_FOUND);
@@ -141,7 +141,6 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         updateById(cinema);
 
         log.info("影院状态变更, id: {}, newStatus: {}", id, dto.getStatus());
-        return toVO(cinema);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.szml.movieticket.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
  */
 @Data
 public class ShowtimeUpdateDTO {
-
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime startAt;
 
     private Integer basePrice;

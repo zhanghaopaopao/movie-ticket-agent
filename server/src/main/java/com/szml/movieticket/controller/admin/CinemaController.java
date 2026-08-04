@@ -75,9 +75,9 @@ public class CinemaController {
      * 启停影院。
      */
     @PutMapping("/{id}/status")
-    public Result<CinemaVO> updateStatus(@PathVariable Long id, @Valid @RequestBody CinemaStatusDTO dto) {
+    public Result<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody CinemaStatusDTO dto) {
         log.info("变更影院状态, 影院ID: {}, 目标状态: {}", id, dto.getStatus());
-        CinemaVO cinemaVO = cinemaService.updateCinemaStatus(id, dto);
-        return Result.success(cinemaVO);
+        cinemaService.updateCinemaStatus(id, dto);
+        return Result.success();
     }
 }

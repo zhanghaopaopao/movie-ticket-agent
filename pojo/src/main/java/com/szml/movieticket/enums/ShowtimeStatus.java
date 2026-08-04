@@ -12,9 +12,9 @@ import lombok.Getter;
 @Getter
 public enum ShowtimeStatus {
 
-    ON_SALE(1, "在售"),
     SOLD_OUT(0, "停售"),
-    CANCELLED(2, "已取消");
+    ON_SALE(1, "在售"),
+    SOLD_OUT_ALL(2, "售罄");
 
     @EnumValue
     private final int code;

@@ -39,7 +39,7 @@ public interface CinemaService extends IService<Cinema> {
     /**
      * 启停影院。
      */
-    CinemaVO updateCinemaStatus(Long id, CinemaStatusDTO dto);
+    void updateCinemaStatus(Long id, CinemaStatusDTO dto);
 
     /**
      * C端分页查询影院列表（含 minPrice、hallTypes）。
