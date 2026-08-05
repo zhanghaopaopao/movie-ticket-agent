@@ -204,10 +204,10 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     @Override
     @Transactional
     public SeatVO createSeat(Long hallId, SeatCreateDTO dto) {
-        requireHall(hallId);
+        requireHall(hallId);//判断影厅是否存在
         Integer status = dto.getStatus() == null ? 0 : dto.getStatus();
         validateSeatValues(dto.getRowNo(), dto.getSeatNo(), dto.getZone(), dto.getSeatType(), status);
-        ensureUniquePosition(hallId, null, dto.getRowNo(), dto.getSeatNo());
+        ensureUniquePosition(hallId, null, dto.getRowNo(), dto.getSeatNo());//不能够创建重复的座位
 
         Seat seat = new Seat();
         seat.setHallId(hallId);
@@ -217,8 +217,8 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         seat.setSeatType(dto.getSeatType());
         seat.setStatus(status);
         seatMapper.insert(seat);
+        syncNewSeatToShowtimes(seat);
 
-        syncSeatToShowtimes(seat);
         log.info("物理座位新增成功, hallId: {}, seatId: {}, position: {}-{}",
                 hallId, seat.getId(), seat.getRowNo(), seat.getSeatNo());
         return toSeatVO(seat);
@@ -328,7 +328,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
                 seat.setSeatType(item.getSeatType());
                 seat.setStatus(status);
                 seatMapper.insert(seat);
-                syncSeatToShowtimes(seat);
+                syncNewSeatToShowtimes(seat);
             } else {
                 Seat seat = existingById.get(item.getId());
                 retainedIds.add(seat.getId());
@@ -432,33 +432,81 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         }
     }
 
+    private void syncNewSeatToShowtimes(Seat seat) {
+        List<Showtime> showtimes = showtimeMapper.selectList(new LambdaQueryWrapper<Showtime>()
+                .eq(Showtime::getHallId, seat.getHallId()));// 查该影厅所有场次
+        if (showtimes.isEmpty()) {
+            return;
+        }
+
+        int targetStatus = inventoryStatus(seat);
+        List<ShowtimeSeat> toInsert = new ArrayList<>();
+        for (Showtime showtime : showtimes) {
+            ShowtimeSeat inventory = new ShowtimeSeat();
+            inventory.setShowtimeId(showtime.getId());
+            inventory.setSeatId(seat.getId());
+            inventory.setPrice(showtime.getBasePrice());
+            inventory.setStatus(targetStatus);
+            inventory.setVersion(0);
+            toInsert.add(inventory);
+        }
+        showtimeSeatMapper.insertBatch(toInsert);
+    }
+
     private void syncSeatToShowtimes(Seat seat) {
+        // 1. 查该影厅所有场次
         List<Showtime> showtimes = showtimeMapper.selectList(new LambdaQueryWrapper<Showtime>()
                 .eq(Showtime::getHallId, seat.getHallId()));
+        if (showtimes.isEmpty()) {
+            return;
+        }
+
+        List<Long> showtimeIds = showtimes.stream().map(Showtime::getId).toList();
+
+        // 2. 批量查已有库存
+        Map<Long, ShowtimeSeat> existingMap = new HashMap<>();
+        List<ShowtimeSeat> existingInventories = showtimeSeatMapper.selectList(
+                new LambdaQueryWrapper<ShowtimeSeat>()
+                        .in(ShowtimeSeat::getShowtimeId, showtimeIds)
+                        .eq(ShowtimeSeat::getSeatId, seat.getId()));
+        for (ShowtimeSeat inv : existingInventories) {
+            existingMap.put(inv.getShowtimeId(), inv);
+        }
+
+        // 3. 区分新增和更新
         int targetStatus = inventoryStatus(seat);
+        List<ShowtimeSeat> toInsert = new ArrayList<>();
+        List<ShowtimeSeat> toUpdate = new ArrayList<>();
+
         for (Showtime showtime : showtimes) {
-            ShowtimeSeat inventory = showtimeSeatMapper.selectOne(new LambdaQueryWrapper<ShowtimeSeat>()
-                    .eq(ShowtimeSeat::getShowtimeId, showtime.getId())
-                    .eq(ShowtimeSeat::getSeatId, seat.getId()));
-            if (inventory == null) {
-                inventory = new ShowtimeSeat();
+            ShowtimeSeat existing = existingMap.get(showtime.getId());
+            if (existing == null) {
+                ShowtimeSeat inventory = new ShowtimeSeat();
                 inventory.setShowtimeId(showtime.getId());
                 inventory.setSeatId(seat.getId());
                 inventory.setPrice(showtime.getBasePrice());
                 inventory.setStatus(targetStatus);
                 inventory.setVersion(0);
-                showtimeSeatMapper.insert(inventory);
-            } else if (inventory.getStatus() == null || inventory.getStatus() == 0
-                    || inventory.getStatus() == 3 || inventory.getStatus() == 4) {
-                inventory.setStatus(targetStatus);
-                showtimeSeatMapper.updateById(inventory);
+                toInsert.add(inventory);
+            } else if (existing.getStatus() == null || existing.getStatus() == 0
+                    || existing.getStatus() == 3 || existing.getStatus() == 4) {
+                existing.setStatus(targetStatus);
+                toUpdate.add(existing);
             }
+        }
+
+        // 4. 批量执行
+        if (!toInsert.isEmpty()) {
+            showtimeSeatMapper.insertBatch(toInsert);
+        }
+        for (ShowtimeSeat inv : toUpdate) {
+            showtimeSeatMapper.updateById(inv);
         }
     }
 
     private static int inventoryStatus(Seat seat) {
         if (seat.getStatus() != null && seat.getStatus() == 1) {
-            return 3;
+            return 3;//返回不可用
         }
         return seat.getSeatType() != null && seat.getSeatType() == 1 ? 4 : 0;
     }
