@@ -105,7 +105,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (StringUtils.hasText(status)) {
             wrapper.eq(Showtime::getStatus, ShowtimeStatus.fromCode(Integer.parseInt(status)));
         }
-        wrapper.orderByAsc(Showtime::getStartAt);
+        wrapper.orderByDesc(Showtime::getStartAt);//按照开场时间进行降序排序
 
         Page<Showtime> pageResult = page(new Page<>(page, size), wrapper);
         List<ShowtimeVO> records = buildShowtimeVOList(pageResult.getRecords());
@@ -231,6 +231,15 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         Showtime showtime = getById(id);
         if (showtime == null) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+
+        // 有已锁定座位时不允许变更状态（已售不影响，管理员可以手动停售）
+        long lockedCount = showtimeSeatMapper.selectCount(
+                new LambdaQueryWrapper<ShowtimeSeat>()
+                        .eq(ShowtimeSeat::getShowtimeId, id)
+                        .eq(ShowtimeSeat::getStatus, INVENTORY_LOCKED));
+        if (lockedCount > 0) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HAS_LOCKED_SEATS);
         }
 
         showtime.setStatus(dto.getStatus());
