@@ -152,26 +152,26 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
     @Override
     public HallSeatVO getHallSeats(Long hallId) {
-        Hall hall = getById(hallId);
+        Hall hall = getById(hallId);//查询影厅实体
         if (hall == null) {
             throw new HallException(ErrorCode.HALL_NOT_FOUND);
         }
 
-        Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
+        Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());//查询影院实体
 
         List<Seat> seats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
                 .eq(Seat::getHallId, hallId)
                 .orderByAsc(Seat::getRowNo, Seat::getSeatNo));
 
         // 统计
-        Map<String, Integer> summary = new LinkedHashMap<>();
+        Map<String, Integer> summary = new HashMap<>();
         summary.put("totalSeats", seats.size());
-        summary.put("normalSeats", (int) seats.stream().filter(s -> s.getSeatType() == 0).count());
-        summary.put("coupleSeats", (int) seats.stream().filter(s -> s.getSeatType() == 1).count());
-        summary.put("unavailableSeats", (int) seats.stream().filter(s -> s.getStatus() == 1).count());
+        summary.put("normalSeats", (int) seats.stream().filter(s -> s.getSeatType() == 0).count());//普通坐
+        summary.put("coupleSeats", (int) seats.stream().filter(s -> s.getSeatType() == 1).count());//情侣坐
+        summary.put("unavailableSeats", (int) seats.stream().filter(s -> s.getStatus() == 1).count());//不可用坐
 
         // 按排分组
-        Map<Integer, List<HallSeatVO.SeatItemVO>> rowMap = new LinkedHashMap<>();
+        Map<Integer, List<HallSeatVO.SeatItemVO>> rowMap = new HashMap<>();
         for (Seat seat : seats) {
             HallSeatVO.SeatItemVO item = new HallSeatVO.SeatItemVO();
             item.setId(seat.getId());
