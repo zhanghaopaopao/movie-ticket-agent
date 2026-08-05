@@ -83,10 +83,10 @@ public enum ErrorCode {
     SHOWTIME_SEAT_NOT_FOUND(5003, "场次座位不存在"),
     SHOWTIME_SEAT_STATUS_INVALID(5004, "场次座位状态不合法"),
     SHOWTIME_ALREADY_STARTED(5005, "该场次已开始，无法继续选座"),
-    SHOWTIME_MOVIE_OFFLINE(5005, "已下架的影片不可排场次"),
-    SHOWTIME_HALL_INACTIVE(5006, "已停用的影厅不可排场次"),
-    SHOWTIME_CINEMA_INACTIVE(5007, "已停用的影院不可排场次"),
-    SHOWTIME_START_AT_TOO_EARLY(5008, "只可创建明天及之后的场次"),
+    SHOWTIME_MOVIE_OFFLINE(5006, "已下架的影片不可排场次"),
+    SHOWTIME_HALL_INACTIVE(5007, "已停用的影厅不可排场次"),
+    SHOWTIME_CINEMA_INACTIVE(5008, "已停用的影院不可排场次"),
+    SHOWTIME_START_AT_TOO_EARLY(5009, "只可创建明天及之后的场次"),
 
     // ---- 订单（6000-6999）----
 
