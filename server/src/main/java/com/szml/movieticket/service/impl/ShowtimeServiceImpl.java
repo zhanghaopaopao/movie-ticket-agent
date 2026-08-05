@@ -262,7 +262,6 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (showtime == null) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
-        initializeShowtimeSeats(showtime);
 
         List<Long> updatedSeatIds = new ArrayList<>();
         List<Long> skippedSeatIds = new ArrayList<>();
@@ -337,7 +336,6 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (showtime == null) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
-        initializeShowtimeSeats(showtime);
 
         Hall hall = hallMapper.selectById(showtime.getHallId());
         if (hall == null) {

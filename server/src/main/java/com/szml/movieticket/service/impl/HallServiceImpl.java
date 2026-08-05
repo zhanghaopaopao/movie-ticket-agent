@@ -278,11 +278,11 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
                 .collect(Collectors.toMap(Seat::getId, seat -> seat));
         Map<String, Seat> existingByPosition = existingSeats.stream()
                 .collect(Collectors.toMap(
-                        seat -> positionKey(seat.getRowNo(), seat.getSeatNo()),
-                        seat -> seat));
+                        s -> positionKey(s.getRowNo(), s.getSeatNo()), s -> s));
         Map<String, SeatLayoutItemDTO> positions = new HashMap<>();
         Set<Long> incomingIds = new HashSet<>();
 
+        // 第一阶段：校验新布局合法性
         for (SeatLayoutItemDTO item : items) {
             Integer status = item.getStatus() == null ? 0 : item.getStatus();
             String zone = normalizeZone(item.getZone());
@@ -295,6 +295,11 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
             if (existingAtPosition != null && !Objects.equals(existingAtPosition.getId(), item.getId())) {
                 throw new SeatException(ErrorCode.SEAT_POSITION_DUPLICATE);
             }
+
+            // 无 ID 的 item，如果位置已有座位则自动绑定 ID（避免删了又建）
+            if (item.getId() == null && existingAtPosition != null) {
+                item.setId(existingAtPosition.getId());
+            }
             if (item.getId() != null) {
                 if (!incomingIds.add(item.getId()) || !existingById.containsKey(item.getId())) {
                     throw new SeatException(ErrorCode.SEAT_NOT_FOUND);
@@ -302,16 +307,21 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
             }
         }
 
+        // 第二阶段：批量校验要变动座位的库存状态
+        Set<Long> changeSeatIds = new HashSet<>();
         for (Seat existing : existingSeats) {
             SeatLayoutItemDTO item = items.stream()
-                    .filter(candidate -> Objects.equals(candidate.getId(), existing.getId()))
+                    .filter(c -> Objects.equals(c.getId(), existing.getId()))
                     .findFirst().orElse(null);
             if (item == null || seatChanged(existing, item)) {
-                assertSeatCanChange(existing.getId());
+                changeSeatIds.add(existing.getId());
             }
         }
+        assertBatchCanChange(changeSeatIds);
 
+        // 第三阶段：批量新增 + 逐座修改
         Set<Long> retainedIds = new HashSet<>();
+        List<Seat> toInsert = new ArrayList<>();
         for (SeatLayoutItemDTO item : items) {
             Integer status = item.getStatus() == null ? 0 : item.getStatus();
             String zone = normalizeZone(item.getZone());
@@ -323,8 +333,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
                 seat.setZone(zone);
                 seat.setSeatType(item.getSeatType());
                 seat.setStatus(status);
-                seatMapper.insert(seat);
-                syncNewSeatToShowtimes(seat);
+                toInsert.add(seat);
             } else {
                 Seat seat = existingById.get(item.getId());
                 retainedIds.add(seat.getId());
@@ -340,14 +349,25 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
             }
         }
 
-        for (Seat existing : existingSeats) {
-            if (!retainedIds.contains(existing.getId()) && !items.stream()
-                    .anyMatch(item -> Objects.equals(item.getId(), existing.getId()))) {
-                showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
-                        .eq(ShowtimeSeat::getSeatId, existing.getId()));
-                seatMapper.deleteById(existing.getId());
-            }
+        // 逐个插入新座位（需自增ID），然后批量同步库存
+        for (Seat seat : toInsert) {
+            seatMapper.insert(seat);
         }
+        if (!toInsert.isEmpty()) {
+            syncNewSeatsToShowtimes(toInsert);
+        }
+
+        // 第四阶段：批量删除不在新布局中的座位
+        Set<Long> deleteSeatIds = existingSeats.stream()
+                .map(Seat::getId)
+                .filter(id -> !retainedIds.contains(id))
+                .collect(Collectors.toSet());
+        if (!deleteSeatIds.isEmpty()) {
+            showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
+                    .in(ShowtimeSeat::getSeatId, deleteSeatIds));
+            seatMapper.deleteBatchIds(deleteSeatIds);
+        }
+
         return getHallSeats(hallId);
     }
 
@@ -414,6 +434,49 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         }
     }
 
+    private void assertBatchCanChange(Set<Long> seatIds) {
+        if (seatIds.isEmpty()) {
+            return;
+        }
+        List<Long> idList = new ArrayList<>(seatIds);
+
+        // 一次查所有库存
+        List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(
+                new LambdaQueryWrapper<ShowtimeSeat>().in(ShowtimeSeat::getSeatId, idList));
+        if (inventories.isEmpty()) {
+            return;
+        }
+
+        // 一次查所有未结束场次
+        List<Long> allShowtimeIds = inventories.stream()
+                .map(ShowtimeSeat::getShowtimeId).distinct().toList();
+        Set<Long> activeShowtimeIds = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .in(Showtime::getId, allShowtimeIds)
+                        .ne(Showtime::getStatus, ShowtimeStatus.ENDED)
+                        .select(Showtime::getId))
+                .stream().map(Showtime::getId).collect(Collectors.toSet());
+
+        // 只对未结束场次的库存做校验
+        List<ShowtimeSeat> activeInventories = inventories.stream()
+                .filter(inv -> activeShowtimeIds.contains(inv.getShowtimeId()))
+                .toList();
+
+        // 第一道：有锁定或已售 → 拒绝
+        if (activeInventories.stream().anyMatch(item ->
+                item.getStatus() != null && (item.getStatus() == 1 || item.getStatus() == 2))) {
+            throw new SeatException(ErrorCode.SEAT_HAS_ACTIVE_INVENTORY);
+        }
+
+        // 第二道：关联了订单记录 → 拒绝
+        List<Long> activeInventoryIds = activeInventories.stream()
+                .map(ShowtimeSeat::getId).toList();
+        if (!activeInventoryIds.isEmpty() && orderItemMapper.selectCount(
+                new LambdaQueryWrapper<OrderItem>().in(OrderItem::getSeatId, activeInventoryIds)) > 0) {
+            throw new SeatException(ErrorCode.SEAT_HAS_ORDER_RECORD);
+        }
+    }
+
     private void assertSeatCanChange(Long seatId) {
         // 查所有场次库存
         List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
@@ -466,6 +529,35 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
             toInsert.add(inventory);
         }
         showtimeSeatMapper.insertBatch(toInsert);
+    }
+
+    private void syncNewSeatsToShowtimes(List<Seat> seats) {
+        if (seats.isEmpty()) {
+            return;
+        }
+        Long hallId = seats.getFirst().getHallId();
+        List<Showtime> showtimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>().eq(Showtime::getHallId, hallId));
+        if (showtimes.isEmpty()) {
+            return;
+        }
+
+        List<ShowtimeSeat> toInsert = new ArrayList<>();
+        for (Seat seat : seats) {
+            int targetStatus = inventoryStatus(seat);
+            for (Showtime showtime : showtimes) {
+                ShowtimeSeat inventory = new ShowtimeSeat();
+                inventory.setShowtimeId(showtime.getId());
+                inventory.setSeatId(seat.getId());
+                inventory.setPrice(showtime.getBasePrice());
+                inventory.setStatus(targetStatus);
+                inventory.setVersion(0);
+                toInsert.add(inventory);
+            }
+        }
+        showtimeSeatMapper.insertBatch(toInsert);
+        log.info("批量同步新座位库存, hallId: {}, seatCount: {}, showtimeCount: {}, totalInsert: {}",
+                hallId, seats.size(), showtimes.size(), toInsert.size());
     }
 
     private void syncSeatToShowtimes(Seat seat) {
