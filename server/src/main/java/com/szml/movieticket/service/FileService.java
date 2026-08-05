@@ -18,4 +18,12 @@ public interface FileService {
      * @return 上传结果（url, fileName, size）
      */
     UploadResultDTO uploadImage(MultipartFile file);
+
+    /**
+     * 上传用户头像到 COS。
+     *
+     * @param file 头像图片
+     * @return 上传结果
+     */
+    UploadResultDTO uploadAvatar(MultipartFile file);
 }

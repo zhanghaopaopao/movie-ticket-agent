@@ -54,6 +54,9 @@ public class MovieVO {
     /** 关联覆盖影院数 */
     private Integer cinemaCount;
 
+    /** 当前登录用户是否已加入想看。 */
+    private Boolean wanted;
+
     /** 创建时间 */
     private LocalDateTime createTime;
 }

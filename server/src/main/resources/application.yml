@@ -11,6 +11,16 @@ spring:
 server:
   port: 8080
 
+alipay:
+  enabled: ${ALIPAY_ENABLED:false}
+  app-id: ${ALIPAY_APP_ID:}
+  merchant-private-key: ${ALIPAY_MERCHANT_PRIVATE_KEY:}
+  alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+  gateway-url: ${ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  notify-url: ${ALIPAY_NOTIFY_URL:}
+  return-url: ${ALIPAY_RETURN_URL:}
+  frontend-return-url: ${ALIPAY_FRONTEND_RETURN_URL:http://localhost:8000/orders/{orderId}/pay/result}
+
 cos:
   client:
     accessKey: xxx

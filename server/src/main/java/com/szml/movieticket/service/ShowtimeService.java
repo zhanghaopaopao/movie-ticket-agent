@@ -52,6 +52,9 @@ public interface ShowtimeService extends IService<Showtime> {
     /** 查询场次座位库存布局。 */
     ShowtimeSeatLayoutVO getSeatLayout(Long showtimeId);
 
+    /** C端查询场次座位库存布局，已开场场次不可进入。 */
+    ShowtimeSeatLayoutVO getSeatLayoutForUser(Long showtimeId);
+
     /**
      * C端场次列表查询（按影片分组，含影院信息、剩余座位）。
      */

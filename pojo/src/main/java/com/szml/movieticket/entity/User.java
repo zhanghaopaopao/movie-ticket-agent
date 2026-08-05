@@ -28,6 +28,9 @@ public class User {
     /** 手机号 */
     private String phone;
 
+    /** 头像 URL */
+    private String avatarUrl;
+
     /** BCrypt 密码摘要 */
     private String passwordHash;
 

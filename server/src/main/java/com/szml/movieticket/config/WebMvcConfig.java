@@ -26,7 +26,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // 认证拦截器：除登录/注册相关路径外的所有接口都需登录
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**", "/api/admin/auth/**")
+                .excludePathPatterns("/api/auth/**", "/api/admin/auth/**",
+                        "/api/payment/alipay/notify", "/api/payment/alipay/return")
                 .order(1);
 
         // 管理员权限拦截器：仅 /api/admin/**（B端登录接口除外）
