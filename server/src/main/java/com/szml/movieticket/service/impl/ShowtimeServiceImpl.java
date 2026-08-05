@@ -657,55 +657,23 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
     private void initializeShowtimeSeats(Showtime showtime) {
         List<Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
-                .eq(Seat::getHallId, showtime.getHallId()));//获取物理实体座位的逻辑实体
+                .eq(Seat::getHallId, showtime.getHallId()));
         if (physicalSeats.isEmpty()) {
             return;
         }
 
-        // 查已有库存
-        List<ShowtimeSeat> existingInventories = showtimeSeatMapper.selectList(
-                new LambdaQueryWrapper<ShowtimeSeat>()
-                        .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));//查询已有该影厅的座位库存列表
-        Map<Long, ShowtimeSeat> existingBySeatId = existingInventories.stream()
-                .collect(Collectors.toMap(ShowtimeSeat::getSeatId, seat -> seat));
-
         List<ShowtimeSeat> toInsert = new ArrayList<>();
-        List<ShowtimeSeat> toUpdate = new ArrayList<>();
-
         for (Seat physicalSeat : physicalSeats) {
-            ShowtimeSeat existing = existingBySeatId.get(physicalSeat.getId());
-            if (existing == null) {
-                // 缺失库存 → 批量新增
-                ShowtimeSeat inventory = new ShowtimeSeat();
-                inventory.setShowtimeId(showtime.getId());
-                inventory.setSeatId(physicalSeat.getId());
-                inventory.setPrice(showtime.getBasePrice());
-                inventory.setStatus(inventoryStatus(physicalSeat));//初始化库存座位的状态不可用/普通坐/情侣座
-                inventory.setVersion(0);
-                toInsert.add(inventory);
-            } else {
-                // 补全缺失的 status 或 price → 批量更新
-                boolean needUpdate = false;
-                if (existing.getStatus() == null) {
-                    existing.setStatus(inventoryStatus(physicalSeat));
-                    needUpdate = true;
-                }
-                if (existing.getPrice() == null) {
-                    existing.setPrice(showtime.getBasePrice());
-                    needUpdate = true;
-                }
-                if (needUpdate) {
-                    toUpdate.add(existing);
-                }
-            }
+            ShowtimeSeat inventory = new ShowtimeSeat();
+            inventory.setShowtimeId(showtime.getId());
+            inventory.setSeatId(physicalSeat.getId());
+            inventory.setPrice(showtime.getBasePrice());
+            inventory.setStatus(inventoryStatus(physicalSeat));
+            inventory.setVersion(0);
+            toInsert.add(inventory);
         }
-
-        if (!toInsert.isEmpty()) {
-            showtimeSeatMapper.insertBatch(toInsert);
-        }
-        for (ShowtimeSeat seat : toUpdate) {
-            showtimeSeatMapper.updateById(seat);
-        }
+        showtimeSeatMapper.insertBatch(toInsert);
+        log.info("场次库存初始化完成, showtimeId: {}, seatCount: {}", showtime.getId(), toInsert.size());
     }
 
     private static int inventoryStatus(Seat seat) {
