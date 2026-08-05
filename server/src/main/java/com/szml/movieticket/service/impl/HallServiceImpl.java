@@ -415,15 +415,34 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     }
 
     private void assertSeatCanChange(Long seatId) {
+        // 查所有场次库存
         List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
                 .eq(ShowtimeSeat::getSeatId, seatId));
-        if (inventories.stream().anyMatch(item -> item.getStatus() != null
-                && (item.getStatus() == 1 || item.getStatus() == 2))) {
+        if (inventories.isEmpty()) {
+            return;
+        }
+
+        // 查出未结束场次，只对未结束场次的库存做校验
+        List<Long> allShowtimeIds = inventories.stream().map(ShowtimeSeat::getShowtimeId).distinct().toList();
+        Set<Long> activeShowtimeIds = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .in(Showtime::getId, allShowtimeIds)
+                        .ne(Showtime::getStatus, ShowtimeStatus.ENDED)
+                        .select(Showtime::getId))
+                .stream().map(Showtime::getId).collect(Collectors.toSet());
+
+        // 第一道：未结束场次中有锁定或已售座位 → 拒绝
+        if (inventories.stream().anyMatch(item -> activeShowtimeIds.contains(item.getShowtimeId())
+                && item.getStatus() != null && (item.getStatus() == 1 || item.getStatus() == 2))) {
             throw new SeatException(ErrorCode.SEAT_HAS_ACTIVE_INVENTORY);
-        }//不允许调整已经售卖的座位的状态
-        List<Long> inventoryIds = inventories.stream().map(ShowtimeSeat::getId).toList();
-        if (!inventoryIds.isEmpty() && orderItemMapper.selectCount(new LambdaQueryWrapper<OrderItem>()
-                .in(OrderItem::getSeatId, inventoryIds)) > 0) {
+        }
+
+        // 第二道：未结束场次的库存关联了订单记录 → 拒绝
+        List<Long> activeInventoryIds = inventories.stream()
+                .filter(inv -> activeShowtimeIds.contains(inv.getShowtimeId()))
+                .map(ShowtimeSeat::getId).toList();
+        if (!activeInventoryIds.isEmpty() && orderItemMapper.selectCount(new LambdaQueryWrapper<OrderItem>()
+                .in(OrderItem::getSeatId, activeInventoryIds)) > 0) {
             throw new SeatException(ErrorCode.SEAT_HAS_ORDER_RECORD);
         }
     }
