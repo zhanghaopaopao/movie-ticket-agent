@@ -10,11 +10,7 @@ import com.szml.movieticket.dto.SeatCreateDTO;
 import com.szml.movieticket.dto.SeatLayoutItemDTO;
 import com.szml.movieticket.dto.SeatLayoutSaveDTO;
 import com.szml.movieticket.dto.SeatUpdateDTO;
-import com.szml.movieticket.entity.Cinema;
-import com.szml.movieticket.entity.Hall;
-import com.szml.movieticket.entity.Seat;
-import com.szml.movieticket.entity.Showtime;
-import com.szml.movieticket.entity.ShowtimeSeat;
+import com.szml.movieticket.entity.*;
 import com.szml.movieticket.enums.HallStatus;
 import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.enumeration.ErrorCode;
@@ -424,10 +420,10 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         if (inventories.stream().anyMatch(item -> item.getStatus() != null
                 && (item.getStatus() == 1 || item.getStatus() == 2))) {
             throw new SeatException(ErrorCode.SEAT_HAS_ACTIVE_INVENTORY);
-        }
+        }//不允许调整已经售卖的座位的状态
         List<Long> inventoryIds = inventories.stream().map(ShowtimeSeat::getId).toList();
-        if (!inventoryIds.isEmpty() && orderItemMapper.selectCount(new LambdaQueryWrapper<com.szml.movieticket.entity.OrderItem>()
-                .in(com.szml.movieticket.entity.OrderItem::getSeatId, inventoryIds)) > 0) {
+        if (!inventoryIds.isEmpty() && orderItemMapper.selectCount(new LambdaQueryWrapper<OrderItem>()
+                .in(OrderItem::getSeatId, inventoryIds)) > 0) {
             throw new SeatException(ErrorCode.SEAT_HAS_ORDER_RECORD);
         }
     }

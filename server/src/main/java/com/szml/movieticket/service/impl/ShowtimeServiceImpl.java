@@ -142,6 +142,11 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             throw new ShowtimeException(ErrorCode.SHOWTIME_CINEMA_INACTIVE);
         }
 
+        // 场次时间不能早于影片上映日期
+        if (movie.getReleaseDate() != null && dto.getStartAt().toLocalDate().isBefore(movie.getReleaseDate())) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);
+        }
+
         // 只允许创建明天及之后的场次
         LocalDateTime tomorrow = LocalDate.now().plusDays(1).atStartOfDay();
         if (dto.getStartAt().isBefore(tomorrow)) {
@@ -193,6 +198,10 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
             // 重新计算 endAt
             Movie movie = movieMapper.selectById(showtime.getMovieId());
+            if (movie != null && movie.getReleaseDate() != null
+                    && dto.getStartAt().toLocalDate().isBefore(movie.getReleaseDate())) {
+                throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);
+            }
             LocalDateTime endAt = dto.getStartAt().plusMinutes(movie != null ? movie.getDuration() + CLEANING_MINUTES : 0);
             checkTimeConflict(showtime.getHallId(), id, dto.getStartAt(), endAt);
             showtime.setStartAt(dto.getStartAt());
