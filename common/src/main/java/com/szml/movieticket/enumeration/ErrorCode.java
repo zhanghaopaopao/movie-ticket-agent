@@ -115,7 +115,15 @@ public enum ErrorCode {
     USER_EMAIL_REQUIRED(9001, "当前账号未绑定邮箱，请联系管理员"),
     USER_EMAIL_SAME(9002, "新邮箱不能与当前邮箱相同"),
     USER_CURRENT_EMAIL_CODE_INVALID(9003, "当前邮箱验证码错误或已过期"),
-    USER_NEW_EMAIL_CODE_INVALID(9004, "新邮箱验证码错误或已过期");
+    USER_NEW_EMAIL_CODE_INVALID(9004, "新邮箱验证码错误或已过期"),
+
+    // ---- 零食：7100-7199 ----
+    SNACK_NOT_FOUND(7100, "零食商品不存在"),
+    SNACK_STOCK_NOT_ENOUGH(7101, "零食库存不足"),
+    SNACK_SELECTION_INVALID(7102, "零食选择不合法"),
+    SNACK_PAYMENT_LOCKED(7103, "订单已进入支付流程，暂不能修改零食"),
+    SNACK_NAME_DUPLICATE(7104, "同一影院下零食名称已存在"),
+    SNACK_STATUS_INVALID(7105, "零食上下架状态不合法");
 
     private final int code;
     private final String message;

@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import com.szml.movieticket.service.OrderSnackService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,7 @@ public class OrderExpireScheduler {
     private final ShowtimeSeatMapper showtimeSeatMapper;
     private final SeatLockLogMapper seatLockLogMapper;
     private final PurchaseDraftMapper draftMapper;
+    private final OrderSnackService orderSnackService;
 
     /**
      * 定时任务：每分钟扫描超时的待支付订单，释放座位 + 标记过期。
@@ -73,6 +75,9 @@ public class OrderExpireScheduler {
             // 标记订单为已过期
             order.setStatus("EXPIRED");
             orderMapper.updateById(order);
+
+            // 订单过期时释放预占的零食库存，零食明细保留为 RELEASED。
+            orderSnackService.releaseReserved(order.getId());
 
             // 解冻草稿
             PurchaseDraft draft = draftMapper.selectOne(
