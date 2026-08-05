@@ -325,8 +325,8 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
                         .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
                         .orderByAsc(Showtime::getBasePrice));
         if (showtimes.isEmpty()) return null;
-        return showtimes.get(0).getBasePrice() != null
-                ? showtimes.get(0).getBasePrice() / 100.0 : null;
+        return showtimes.getFirst().getBasePrice() != null
+                ? showtimes.getFirst().getBasePrice() / 100.0 : null;
     }
 
     /**

@@ -72,7 +72,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
                                    String orderNo, Long movieId, Long cinemaId, String status,
                                    String startDate, String endDate) {
         if (StringUtils.hasText(orderNo)) {
-            wrapper.eq(TicketOrder::getOrderNo, orderNo);
+            wrapper.like(TicketOrder::getOrderNo, orderNo);//按照订单号进行模糊查询
         }
         if (movieId != null) {
             // 通过 showtime 表找 movieId 匹配的场次
@@ -114,7 +114,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         wrapper.orderByDesc(TicketOrder::getCreateTime);
 
         Page<TicketOrder> pageResult = page(new Page<>(pageNum, size), wrapper);
-        List<OrderVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<OrderVO> records = buildOrderVOList(pageResult.getRecords());
 
         OrderPageVO pageVO = new OrderPageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -255,6 +255,157 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         vo.setSeatLockLogs(logVOs);
 
         return vo;
+    }
+
+    /**
+     * 批量构建订单 VO，避免 N+1 循环查库。
+     */
+    private List<OrderVO> buildOrderVOList(List<TicketOrder> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        // 收集 IDs
+        Set<Long> userIds = new HashSet<>();
+        Set<Long> showtimeIds = new HashSet<>();
+        Set<Long> orderIds = new HashSet<>();
+        for (TicketOrder o : orders) {
+            userIds.add(o.getUserId());
+            showtimeIds.add(o.getShowtimeId());
+            orderIds.add(o.getId());
+        }
+
+        // 1. 批量查 User
+        Map<Long, User> userMap = new HashMap<>();
+        for (User u : userMapper.selectBatchIds(userIds)) {
+            userMap.put(u.getId(), u);
+        }
+
+        // 2. 批量查 Showtime
+        Map<Long, Showtime> showtimeMap = new HashMap<>();
+        for (Showtime s : showtimeMapper.selectBatchIds(showtimeIds)) {
+            showtimeMap.put(s.getId(), s);
+        }
+
+        // 3. 从 Showtime 收集 movieIds, hallIds
+        Set<Long> movieIds = new HashSet<>();
+        Set<Long> hallIds = new HashSet<>();
+        for (Showtime s : showtimeMap.values()) {
+            movieIds.add(s.getMovieId());
+            hallIds.add(s.getHallId());
+        }
+
+        // 4. 批量查 Movie
+        Map<Long, Movie> movieMap = new HashMap<>();
+        if (!movieIds.isEmpty()) {
+            for (Movie m : movieMapper.selectBatchIds(movieIds)) {
+                movieMap.put(m.getId(), m);
+            }
+        }
+
+        // 5. 批量查 Hall
+        Map<Long, Hall> hallMap = new HashMap<>();
+        if (!hallIds.isEmpty()) {
+            for (Hall h : hallMapper.selectBatchIds(hallIds)) {
+                hallMap.put(h.getId(), h);
+            }
+        }
+
+        // 6. 从 Hall 收集 cinemaIds
+        Set<Long> cinemaIds = new HashSet<>();
+        for (Hall h : hallMap.values()) {
+            cinemaIds.add(h.getCinemaId());
+        }
+
+        // 7. 批量查 Cinema
+        Map<Long, Cinema> cinemaMap = new HashMap<>();
+        if (!cinemaIds.isEmpty()) {
+            for (Cinema c : cinemaMapper.selectBatchIds(cinemaIds)) {
+                cinemaMap.put(c.getId(), c);
+            }
+        }
+
+        // 8. 批量查 OrderItem
+        Map<Long, List<OrderItem>> itemsByOrderId = new HashMap<>();
+        Set<Long> allSeatIds = new HashSet<>();
+        for (OrderItem item : orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().in(OrderItem::getOrderId, orderIds))) {
+            itemsByOrderId.computeIfAbsent(item.getOrderId(), k -> new ArrayList<>()).add(item);
+            allSeatIds.add(item.getSeatId());
+        }
+
+        // 9. 批量查 ShowtimeSeat
+        Map<Long, ShowtimeSeat> showtimeSeatMap = new HashMap<>();
+        if (!allSeatIds.isEmpty()) {
+            for (ShowtimeSeat sts : showtimeSeatMapper.selectBatchIds(allSeatIds)) {
+                showtimeSeatMap.put(sts.getId(), sts);
+            }
+        }
+
+        // 10. 从 ShowtimeSeat 收集物理座位 ID
+        Set<Long> physicalSeatIds = new HashSet<>();
+        for (ShowtimeSeat sts : showtimeSeatMap.values()) {
+            physicalSeatIds.add(sts.getSeatId());
+        }
+
+        // 11. 批量查物理 Seat
+        Map<Long, Seat> seatMap = new HashMap<>();
+        if (!physicalSeatIds.isEmpty()) {
+            for (Seat s : seatMapper.selectBatchIds(physicalSeatIds)) {
+                seatMap.put(s.getId(), s);
+            }
+        }
+
+        // 12. 组装
+        return orders.stream().map(order -> {
+            OrderVO vo = new OrderVO();
+            vo.setId(order.getId());
+            vo.setOrderNo(order.getOrderNo());
+            vo.setUserId(order.getUserId());
+            vo.setAmount(AmountUtil.yuan(order.getAmount()));
+            vo.setStatus(order.getStatus());
+            vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
+            vo.setCreateTime(order.getCreateTime());
+
+            User user = userMap.get(order.getUserId());
+            if (user != null) {
+                vo.setUserEmail(user.getEmail());
+            }
+
+            Showtime showtime = showtimeMap.get(order.getShowtimeId());
+            if (showtime != null) {
+                vo.setStartAt(showtime.getStartAt());
+
+                Movie movie = movieMap.get(showtime.getMovieId());
+                if (movie != null) {
+                    vo.setMovieName(movie.getName());
+                }
+
+                Hall hall = hallMap.get(showtime.getHallId());
+                if (hall != null) {
+                    vo.setHallName(hall.getName());
+
+                    Cinema cinema = cinemaMap.get(hall.getCinemaId());
+                    if (cinema != null) {
+                        vo.setCinemaName(cinema.getName());
+                    }
+                }
+            }
+
+            List<OrderItem> items = itemsByOrderId.getOrDefault(order.getId(), List.of());
+            List<String> seatLabels = new ArrayList<>();
+            for (OrderItem item : items) {
+                ShowtimeSeat sts = showtimeSeatMap.get(item.getSeatId());
+                if (sts != null) {
+                    Seat seat = seatMap.get(sts.getSeatId());
+                    if (seat != null) {
+                        seatLabels.add(seat.getRowNo() + "排" + seat.getSeatNo() + "座");
+                    }
+                }
+            }
+            vo.setSeatSummary(String.join(", ", seatLabels));
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     private OrderVO toVO(TicketOrder order) {
