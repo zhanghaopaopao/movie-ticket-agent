@@ -136,6 +136,9 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         if (hall.getStatus() == HallStatus.INACTIVE) {
             throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_INACTIVE);
         }
+        if (seatMapper.selectCount(new LambdaQueryWrapper<Seat>().eq(Seat::getHallId, dto.getHallId())) == 0) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_NO_SEATS);
+        }
 
         Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
         if (cinema != null && cinema.getStatus() == CinemaStatus.INACTIVE) {
@@ -607,18 +610,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             }
         }
 
-        // 6. 兜底初始化缺失库存的场次
-        for (Showtime s : showtimes) {
-            int totalSeats = seatCountMap.getOrDefault(s.getHallId(), 0);
-            if (inventoryMap.getOrDefault(s.getId(), List.of()).isEmpty() && totalSeats > 0) {
-                initializeShowtimeSeats(s);
-                List<ShowtimeSeat> reloaded = showtimeSeatMapper.selectList(
-                        new LambdaQueryWrapper<ShowtimeSeat>().eq(ShowtimeSeat::getShowtimeId, s.getId()));
-                inventoryMap.put(s.getId(), reloaded);
-            }
-        }
-
-        // 7. 组装
+        // 6. 组装
         return showtimes.stream().map(s -> {
             ShowtimeVO vo = new ShowtimeVO();
             BeanUtils.copyProperties(s, vo);
@@ -661,60 +653,6 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
             return vo;
         }).collect(Collectors.toList());
-    }
-
-    private ShowtimeVO toVO(Showtime showtime) {
-        ShowtimeVO vo = new ShowtimeVO();
-        BeanUtils.copyProperties(showtime, vo);
-
-        // 嵌套对象
-        Movie movie = movieMapper.selectById(showtime.getMovieId());
-        if (movie != null) {
-            ShowtimeVO.MovieBriefVO movieBrief = new ShowtimeVO.MovieBriefVO();
-            movieBrief.setId(movie.getId());
-            movieBrief.setName(movie.getName());
-            vo.setMovie(movieBrief);
-        }
-
-        Hall hall = hallMapper.selectById(showtime.getHallId());
-        if (hall != null) {
-            ShowtimeVO.HallBriefVO hallBrief = new ShowtimeVO.HallBriefVO();
-            hallBrief.setId(hall.getId());
-            hallBrief.setName(hall.getName());
-            hallBrief.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
-            vo.setHall(hallBrief);
-
-            Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
-            if (cinema != null) {
-                ShowtimeVO.CinemaBriefVO cinemaBrief = new ShowtimeVO.CinemaBriefVO();
-                cinemaBrief.setId(cinema.getId());
-                cinemaBrief.setName(cinema.getName());
-                vo.setCinema(cinemaBrief);
-            }
-        }
-
-        vo.setStatus(showtime.getStatus() != null ? showtime.getStatus().getCode() : null);
-        vo.setStatusDesc(showtime.getStatus() != null ? showtime.getStatus().getDesc() : null);
-
-        int totalSeats = hall == null ? 0 : Math.toIntExact(seatMapper.selectCount(
-                new LambdaQueryWrapper<Seat>().eq(Seat::getHallId, showtime.getHallId())));//返回影厅的物理座位数量,并将其安全的转化为int类型
-
-        List<ShowtimeSeat> inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
-                .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));//找到该场次下的库存实体列表
-
-        if (inventories.isEmpty() && totalSeats > 0) {//懒加载只有当库存为空但是有库存实体才进行
-            initializeShowtimeSeats(showtime);
-            inventories = showtimeSeatMapper.selectList(new LambdaQueryWrapper<ShowtimeSeat>()
-                    .eq(ShowtimeSeat::getShowtimeId, showtime.getId()));
-        }
-        vo.setSoldSeats((int) inventories.stream()
-                .filter(seat -> seat.getStatus() != null && seat.getStatus() == INVENTORY_SOLD)
-                .count());//查询已售出的座位
-        vo.setTotalSeats(totalSeats);
-//        vo.setLockedCount((int) inventories.stream()
-//                .filter(seat -> seat.getStatus() != null && seat.getStatus() == INVENTORY_LOCKED)
-//                .count());
-        return vo;
     }
 
     private void initializeShowtimeSeats(Showtime showtime) {
