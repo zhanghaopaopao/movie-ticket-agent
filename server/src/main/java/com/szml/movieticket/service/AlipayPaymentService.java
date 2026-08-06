@@ -14,7 +14,7 @@ public interface AlipayPaymentService {
     String createWapPayForm(String outTradeNo, String subject, Integer amountFen);
 
     /** Creates the QR-code content used by the face-to-face sandbox payment flow. */
-    String createPrecreateQrCode(String outTradeNo, String subject, Integer amountFen);
+//    String createPrecreateQrCode(String outTradeNo, String subject, Integer amountFen);
 
     /** Verifies the signature and application identity of an Alipay notification. */
     boolean verifyNotification(Map<String, String> params);

@@ -25,7 +25,7 @@ public interface OrderTicketService {
     PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey);
 
     /** 创建支付宝二维码支付交易。 */
-    PaymentInitVO createQrPayment(Long userId, Long orderId, String idempotencyKey);
+//    PaymentInitVO createQrPayment(Long userId, Long orderId, String idempotencyKey);
 
     /** 处理支付宝验签后的成功通知。方法必须具备幂等性。 */
     void handleAlipaySuccess(String outTradeNo, String tradeNo, java.math.BigDecimal totalAmount,

@@ -229,17 +229,17 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     @Override
     @Transactional
     public PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey) {
-        return createPaymentInternal(userId, orderId, idempotencyKey, false);
-    }
-
-    @Override
-    @Transactional
-    public PaymentInitVO createQrPayment(Long userId, Long orderId, String idempotencyKey) {
-        return createPaymentInternal(userId, orderId, idempotencyKey, true);
-    }
-
-    private PaymentInitVO createPaymentInternal(Long userId, Long orderId, String idempotencyKey,
-                                                boolean qrCodePayment) {
+//        return createPaymentInternal(userId, orderId, idempotencyKey, false);
+//    }
+//
+//    @Override
+//    @Transactional
+//    public PaymentInitVO createQrPayment(Long userId, Long orderId, String idempotencyKey) {
+//        return createPaymentInternal(userId, orderId, idempotencyKey, true);
+//    }
+//
+//    private PaymentInitVO createPaymentInternal(Long userId, Long orderId, String idempotencyKey,
+//                                                boolean qrCodePayment) {
         TicketOrder order = orderMapper.selectForUpdate(orderId);
         if (order == null) {
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
@@ -311,11 +311,11 @@ public class OrderTicketServiceImpl implements OrderTicketService {
 
         result.setOutTradeNo(outTradeNo);
         result.setPaymentStatus("PENDING");
-        if (qrCodePayment) {
-            result.setQrCode(alipayPaymentService.createPrecreateQrCode(outTradeNo, subject, order.getAmount()));
-        } else {
+//        if (qrCodePayment) {
+//            result.setQrCode(alipayPaymentService.createPrecreateQrCode(outTradeNo, subject, order.getAmount()));
+//        } else {
             result.setPayForm(alipayPaymentService.createWapPayForm(outTradeNo, subject, order.getAmount()));
-        }
+//        }
         return result;
     }
 
