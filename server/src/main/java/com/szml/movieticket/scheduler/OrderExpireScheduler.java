@@ -31,6 +31,7 @@ public class OrderExpireScheduler {
     private final ShowtimeSeatMapper showtimeSeatMapper;
     private final SeatLockLogMapper seatLockLogMapper;
     private final PurchaseDraftMapper draftMapper;
+    private final PaymentMapper paymentMapper;
     private final OrderSnackService orderSnackService;
 
     /**
@@ -75,6 +76,17 @@ public class OrderExpireScheduler {
             // 标记订单为已过期
             order.setStatus("EXPIRED");
             orderMapper.updateById(order);
+
+            // 关闭 PENDING 状态的支付记录
+            Payment payment = paymentMapper.selectOne(
+                    new LambdaQueryWrapper<Payment>()
+                            .eq(Payment::getOrderId, order.getId())
+                            .orderByDesc(Payment::getId)
+                            .last("LIMIT 1"));
+            if (payment != null && "PENDING".equals(payment.getStatus())) {
+                payment.setStatus("CLOSED");
+                paymentMapper.updateById(payment);
+            }
 
             // 订单过期时释放预占的零食库存，零食明细保留为 RELEASED。
             orderSnackService.releaseReserved(order.getId());
