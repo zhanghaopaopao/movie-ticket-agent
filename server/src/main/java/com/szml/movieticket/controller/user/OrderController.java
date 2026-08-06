@@ -70,6 +70,17 @@ public class OrderController {
     }
 
     /**
+     * 退票（已出票订单退款，座位释放）。
+     */
+    @PostMapping("/{id}/refund")
+    public Result<Void> refund(@PathVariable Long id) {
+        Long userId = UserContext.getUserId();
+        log.info("退票, 用户ID: {}, 订单ID: {}", userId, id);
+        orderTicketService.refundOrder(userId, id);
+        return Result.success();
+    }
+
+    /**
      * 订单列表。
      */
     @GetMapping

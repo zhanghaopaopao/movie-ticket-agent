@@ -601,6 +601,73 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         log.info("取消订单成功, userId: {}, orderId: {}", userId, orderId);
     }
 
+    @Override
+    @Transactional
+    public void refundOrder(Long userId, Long orderId) {
+        TicketOrder order = orderMapper.selectForUpdate(orderId);
+        if (order == null || !order.getUserId().equals(userId)) {
+            throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (!"TICKETED".equals(order.getStatus())) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+
+        Showtime showtime = showtimeMapper.selectById(order.getShowtimeId());
+        if (showtime != null && showtime.getStartAt() != null
+                && !showtime.getStartAt().isAfter(LocalDateTime.now())) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+
+        // ① 座位 SOLD(2) → AVAILABLE(0)
+        List<OrderItem> items = orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, orderId));
+        for (OrderItem item : items) {
+            ShowtimeSeat seat = showtimeSeatMapper.selectById(item.getSeatId());
+            if (seat != null && seat.getStatus() == 2) {
+                seat.setStatus(0);
+                seat.setLockOwner(null);
+                seat.setLockExpiresAt(null);
+                showtimeSeatMapper.updateById(seat);
+            }
+            SeatLockLog log1 = new SeatLockLog();
+            log1.setOrderId(orderId);
+            log1.setShowtimeId(order.getShowtimeId());
+            log1.setSeatId(item.getSeatId());
+            log1.setAction("REFUND");
+            seatLockLogMapper.insert(log1);
+        }
+
+        // ② 订单 → REFUNDED
+        order.setStatus("REFUNDED");
+        orderMapper.updateById(order);
+
+        // ③ 支付记录标退款
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1"));
+        if (payment != null && "SUCCESS".equals(payment.getStatus())) {
+            payment.setStatus("REFUNDED");
+            paymentMapper.updateById(payment);
+        }
+
+        // ④ 电子票标为已退
+        List<Ticket> tickets = ticketMapper.selectList(
+                new LambdaQueryWrapper<Ticket>().eq(Ticket::getOrderId, orderId));
+        for (Ticket ticket : tickets) {
+            ticket.setStatus(1);
+            ticketMapper.updateById(ticket);
+        }
+
+        // ⑤ 如果场次是售罄 → 恢复为在售
+        if (showtime != null && showtime.getStatus() == ShowtimeStatus.SOLD_OUT_ALL) {
+            showtime.setStatus(ShowtimeStatus.ON_SALE);
+            showtimeMapper.updateById(showtime);
+        }
+
+        log.info("退票成功, userId: {}, orderId: {}", userId, orderId);
+    }
+
     /**
      * 批量构建 C 端订单 VO，避免 N+1 循环查库。
      */

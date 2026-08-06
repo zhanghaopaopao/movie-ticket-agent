@@ -43,6 +43,14 @@ public interface OrderTicketService {
     void cancelOrder(Long userId, Long orderId);
 
     /**
+     * 退票（已出票订单退款，座位释放）。
+     *
+     * @param userId  用户ID
+     * @param orderId 订单ID
+     */
+    void refundOrder(Long userId, Long orderId);
+
+    /**
      * C 端订单列表。
      */
     UserOrderPageVO listOrders(Long userId, int page, int size, String status);
