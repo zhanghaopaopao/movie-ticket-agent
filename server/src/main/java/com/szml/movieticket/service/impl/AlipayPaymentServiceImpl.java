@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -47,7 +49,8 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
                 .setScale(2, RoundingMode.HALF_UP).toPlainString());
         bizContent.put("subject", subject);
         bizContent.put("product_code", "QUICK_WAP_WAY");
-        bizContent.put("quit_url", properties.getReturnUrl());
+        // 主动退出支付时携带当前交易号，后端才能返回对应订单的待支付页。
+        bizContent.put("quit_url", buildQuitUrl(outTradeNo));
         try {
             request.setBizContent(objectMapper.writeValueAsString(bizContent));
             // WAP checkout must be submitted as the SDK-generated HTML form so the
@@ -66,6 +69,14 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
             log.error("Failed to create Alipay WAP payment, outTradeNo={}", outTradeNo, e);
             throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
         }
+    }
+
+    private String buildQuitUrl(String outTradeNo) {
+        String returnUrl = properties.getReturnUrl();
+        String separator = returnUrl.contains("?") ? "&" : "?";
+        return returnUrl + separator
+                + "cancelled=true&out_trade_no="
+                + URLEncoder.encode(outTradeNo, StandardCharsets.UTF_8);
     }
 
 //    @Override

@@ -61,12 +61,24 @@ public class AlipayCallbackServiceImpl implements AlipayCallbackService {
 
     @Override
     public String buildFrontendReturnUrl(String outTradeNo) {
+        return buildFrontendReturnUrl(outTradeNo, false);
+    }
+
+    @Override
+    public String buildFrontendReturnUrl(String outTradeNo, boolean cancelled) {
         Long orderId = findOrderId(outTradeNo);
-        String target = properties.getFrontendReturnUrl();
+        String target = cancelled
+                ? properties.getFrontendPayUrl()
+                : properties.getFrontendReturnUrl();
         if (target == null || target.isBlank()) {
-            target = "http://localhost:8000/me/orders";
+            target = cancelled
+                    ? "http://localhost:8001/orders/{orderId}/pay?alipayCancelled=1"
+                    : "http://localhost:8001/orders/{orderId}/pay/result";
         }
         if (orderId == null) {
+            if (cancelled) {
+                return "http://localhost:8001/me/orders";
+            }
             return target.replace("/{orderId}", "").replace("{orderId}", "");
         }
         return target.replace("{orderId}", String.valueOf(orderId));

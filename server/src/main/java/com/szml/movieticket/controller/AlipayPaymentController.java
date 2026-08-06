@@ -28,7 +28,11 @@ public class AlipayPaymentController {
 
     @GetMapping("/return")
     public void returnFromAlipay(@RequestParam(required = false) String out_trade_no,
+                                 @RequestParam(defaultValue = "false") boolean cancelled,
                                  HttpServletResponse response) throws IOException {
-        response.sendRedirect(alipayCallbackService.buildFrontendReturnUrl(out_trade_no));
+        String target = cancelled
+                ? alipayCallbackService.buildFrontendReturnUrl(out_trade_no, true)
+                : alipayCallbackService.buildFrontendReturnUrl(out_trade_no);
+        response.sendRedirect(target);
     }
 }
