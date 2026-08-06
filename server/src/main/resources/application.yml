@@ -19,7 +19,8 @@ alipay:
   gateway-url: ${ALIPAY_GATEWAY_URL:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
   notify-url: ${ALIPAY_NOTIFY_URL:}
   return-url: ${ALIPAY_RETURN_URL:}
-  frontend-return-url: ${ALIPAY_FRONTEND_RETURN_URL:http://localhost:8000/orders/{orderId}/pay/result}
+  frontend-return-url: ${ALIPAY_FRONTEND_RETURN_URL:http://localhost:8001/orders/{orderId}/pay/result}
+  frontend-pay-url: ${ALIPAY_FRONTEND_PAY_URL:http://localhost:8001/orders/{orderId}/pay?alipayCancelled=1}
 
 cos:
   client:

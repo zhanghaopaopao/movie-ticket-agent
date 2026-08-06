@@ -19,6 +19,9 @@ public class UserOrderVO {
 
     private String movieName;
 
+    /** 影片海报 URL，订单列表直接返回，避免前端逐条查询详情。 */
+    private String moviePoster;
+
     private String cinemaName;
 
     private String hallName;

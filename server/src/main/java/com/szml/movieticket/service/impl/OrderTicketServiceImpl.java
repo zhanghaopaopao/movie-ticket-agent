@@ -17,6 +17,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -62,6 +64,18 @@ public class OrderTicketServiceImpl implements OrderTicketService {
                 end
             end
             return {1}
+            """;
+
+    /** 仅删除仍归指定用户所有的座位锁，避免误删锁过期后其他用户新建的锁。 */
+    private static final String UNLOCK_LUA_SCRIPT = """
+            local owner = ARGV[1]
+            local deleted = 0
+            for i = 1, #KEYS do
+                if redis.call('GET', KEYS[i]) == owner then
+                    deleted = deleted + redis.call('DEL', KEYS[i])
+                end
+            end
+            return deleted
             """;
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -228,7 +242,8 @@ public class OrderTicketServiceImpl implements OrderTicketService {
 
     @Override
     @Transactional
-    public PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey) {
+    public PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey,
+                                       String userAgent) {
         TicketOrder order = orderMapper.selectForUpdate(orderId);
         if (order == null) {
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
@@ -297,7 +312,8 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             paymentMapper.updateById(payment);
         }
 
-        String payForm = alipayPaymentService.createWapPayForm(outTradeNo, subject, order.getAmount());
+        String payForm = alipayPaymentService.createPayForm(
+                outTradeNo, subject, order.getAmount(), order.getId(), userAgent);
         result.setOutTradeNo(outTradeNo);
         result.setPaymentStatus("PENDING");
         result.setPayForm(payForm);
@@ -570,7 +586,49 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             draftMapper.updateById(draft);
         }
 
+        releaseRedisSeatLocksAfterCommit(userId, order.getShowtimeId(),
+                items.stream().map(OrderItem::getSeatId).filter(Objects::nonNull).toList());
+
         log.info("取消订单成功, userId: {}, orderId: {}", userId, orderId);
+    }
+
+    /**
+     * 数据库事务提交后释放 Redis 座位锁；无事务环境下立即执行，便于独立调用和测试。
+     */
+    private void releaseRedisSeatLocksAfterCommit(Long userId, Long showtimeId, List<Long> seatIds) {
+        if (userId == null || showtimeId == null || seatIds.isEmpty()) {
+            return;
+        }
+
+        Runnable releaseTask = () -> {
+            List<String> redisKeys = seatIds.stream()
+                    .map(seatId -> REDIS_LOCK_PREFIX + showtimeId + ":seat:" + seatId)
+                    .toList();
+            try {
+                Long deleted = stringRedisTemplate.execute(
+                        new DefaultRedisScript<>(UNLOCK_LUA_SCRIPT, Long.class),
+                        redisKeys,
+                        String.valueOf(userId));
+                log.debug("Redis座位锁释放完成, userId: {}, showtimeId: {}, requested: {}, deleted: {}",
+                        userId, showtimeId, redisKeys.size(), deleted == null ? 0 : deleted);
+            } catch (RuntimeException exception) {
+                // MySQL 已经提交时不能再回滚，Redis 锁仍会在原 TTL 到期后自动清理。
+                log.error("Redis座位锁释放失败，将等待TTL自动过期, userId: {}, showtimeId: {}, seatIds: {}",
+                        userId, showtimeId, seatIds, exception);
+            }
+        };
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    releaseTask.run();
+                }
+            });
+            return;
+        }
+        releaseTask.run();
     }
 
     @Override
@@ -585,7 +643,86 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         Page<TicketOrder> pageResult = new Page<>(page, size);
         orderMapper.selectPage(pageResult, wrapper);
 
-        List<UserOrderVO> records = pageResult.getRecords().stream().map(order -> {
+        List<UserOrderVO> records = buildUserOrderVOList(pageResult.getRecords());
+
+        UserOrderPageVO pageVO = new UserOrderPageVO();
+        pageVO.setTotal(pageResult.getTotal());
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(records);
+        return pageVO;
+    }
+
+    /**
+     * 批量组装 C 端订单列表，避免按订单和座位逐条查询关联数据。
+     */
+    private List<UserOrderVO> buildUserOrderVOList(List<TicketOrder> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> orderIds = orders.stream().map(TicketOrder::getId).collect(Collectors.toSet());
+        Set<Long> showtimeIds = orders.stream()
+                .map(TicketOrder::getShowtimeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, Showtime> showtimeMap = showtimeIds.isEmpty()
+                ? Map.of()
+                : showtimeMapper.selectBatchIds(showtimeIds).stream()
+                .collect(Collectors.toMap(Showtime::getId, showtime -> showtime));
+
+        Set<Long> movieIds = showtimeMap.values().stream()
+                .map(Showtime::getMovieId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Movie> movieMap = movieIds.isEmpty()
+                ? Map.of()
+                : movieMapper.selectBatchIds(movieIds).stream()
+                .collect(Collectors.toMap(Movie::getId, movie -> movie));
+
+        Set<Long> hallIds = showtimeMap.values().stream()
+                .map(Showtime::getHallId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Hall> hallMap = hallIds.isEmpty()
+                ? Map.of()
+                : hallMapper.selectBatchIds(hallIds).stream()
+                .collect(Collectors.toMap(Hall::getId, hall -> hall));
+
+        Set<Long> cinemaIds = hallMap.values().stream()
+                .map(Hall::getCinemaId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Cinema> cinemaMap = cinemaIds.isEmpty()
+                ? Map.of()
+                : cinemaMapper.selectBatchIds(cinemaIds).stream()
+                .collect(Collectors.toMap(Cinema::getId, cinema -> cinema));
+
+        List<OrderItem> orderItems = orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().in(OrderItem::getOrderId, orderIds));
+        Map<Long, List<OrderItem>> itemsByOrderId = orderItems.stream()
+                .collect(Collectors.groupingBy(OrderItem::getOrderId));
+
+        Set<Long> inventoryIds = orderItems.stream()
+                .map(OrderItem::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, ShowtimeSeat> inventoryMap = inventoryIds.isEmpty()
+                ? Map.of()
+                : showtimeSeatMapper.selectBatchIds(inventoryIds).stream()
+                .collect(Collectors.toMap(ShowtimeSeat::getId, seat -> seat));
+
+        Set<Long> physicalSeatIds = inventoryMap.values().stream()
+                .map(ShowtimeSeat::getSeatId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Seat> seatMap = physicalSeatIds.isEmpty()
+                ? Map.of()
+                : seatMapper.selectBatchIds(physicalSeatIds).stream()
+                .collect(Collectors.toMap(Seat::getId, seat -> seat));
+
+        return orders.stream().map(order -> {
             UserOrderVO vo = new UserOrderVO();
             vo.setId(order.getId());
             vo.setOrderNo(order.getOrderNo());
@@ -595,42 +732,38 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             vo.setExpiresAt(order.getExpiresAt());
             vo.setCreateTime(order.getCreateTime());
 
-            Showtime showtime = showtimeMapper.selectById(order.getShowtimeId());
+            Showtime showtime = showtimeMap.get(order.getShowtimeId());
             if (showtime != null) {
                 vo.setStartAt(showtime.getStartAt());
-                Movie movie = movieMapper.selectById(showtime.getMovieId());
-                if (movie != null) vo.setMovieName(movie.getName());
-                Hall hall = hallMapper.selectById(showtime.getHallId());
+                Movie movie = movieMap.get(showtime.getMovieId());
+                if (movie != null) {
+                    vo.setMovieName(movie.getName());
+                    vo.setMoviePoster(movie.getPoster());
+                }
+                Hall hall = hallMap.get(showtime.getHallId());
                 if (hall != null) {
                     vo.setHallName(hall.getName());
-                    Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
-                    if (cinema != null) vo.setCinemaName(cinema.getName());
+                    Cinema cinema = cinemaMap.get(hall.getCinemaId());
+                    if (cinema != null) {
+                        vo.setCinemaName(cinema.getName());
+                    }
                 }
             }
 
-            // 座位摘要
-            List<OrderItem> items = orderItemMapper.selectList(
-                    new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, order.getId()));
             List<String> seatLabels = new ArrayList<>();
-            for (OrderItem item : items) {
-                ShowtimeSeat sts = showtimeSeatMapper.selectById(item.getSeatId());
-                if (sts != null) {
-                    Seat seat = seatMapper.selectById(sts.getSeatId());
-                    if (seat != null) {
-                        seatLabels.add(seat.getRowNo() + "排" + seat.getSeatNo() + "座");
-                    }
+            for (OrderItem item : itemsByOrderId.getOrDefault(order.getId(), List.of())) {
+                ShowtimeSeat inventory = inventoryMap.get(item.getSeatId());
+                if (inventory == null) {
+                    continue;
+                }
+                Seat seat = seatMap.get(inventory.getSeatId());
+                if (seat != null) {
+                    seatLabels.add(seat.getRowNo() + "排" + seat.getSeatNo() + "座");
                 }
             }
             vo.setSeatSummary(String.join(", ", seatLabels));
             return vo;
         }).collect(Collectors.toList());
-
-        UserOrderPageVO pageVO = new UserOrderPageVO();
-        pageVO.setTotal(pageResult.getTotal());
-        pageVO.setPage(page);
-        pageVO.setSize(size);
-        pageVO.setRecords(records);
-        return pageVO;
     }
 
     @Override

@@ -18,6 +18,7 @@ public class AlipayProperties {
     private String notifyUrl;
     private String returnUrl;
     private String frontendReturnUrl;
+    private String frontendPayUrl;
 
     public boolean isConfigured() {
         return enabled && hasText(appId) && hasText(merchantPrivateKey)

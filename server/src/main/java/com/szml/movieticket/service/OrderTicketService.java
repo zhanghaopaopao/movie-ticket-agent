@@ -21,8 +21,8 @@ public interface OrderTicketService {
      */
     LockResultVO lockSeats(Long userId, Long showtimeId, java.util.List<Long> seatIds, Integer draftVersion);
 
-    /** 创建支付宝 WAP 支付交易。 */
-    PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey);
+    /** 根据客户端类型创建支付宝电脑网站或 WAP 支付交易。 */
+    PaymentInitVO createPayment(Long userId, Long orderId, String idempotencyKey, String userAgent);
 
     /** 处理支付宝验签后的成功通知。方法必须具备幂等性。 */
     void handleAlipaySuccess(String outTradeNo, String tradeNo, java.math.BigDecimal totalAmount,

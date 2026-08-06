@@ -51,7 +51,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         wrapper.orderByDesc(Cinema::getCreateTime);//按照影院的创建时间进行倒序排序
 
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
-        List<CinemaVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<CinemaVO> records = buildCinemaVOList(pageResult.getRecords(), false);
 
         CinemaPageVO pageVO = new CinemaPageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -205,11 +205,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         wrapper.orderByDesc(Cinema::getCreateTime);
 
         Page<Cinema> pageResult = page(new Page<>(page, size), wrapper);
-        List<CinemaVO> records = pageResult.getRecords().stream().map(cinema -> {
-            CinemaVO vo = toVO(cinema);
-            vo.setMinPrice(getMinPrice(cinema.getId()));
-            return vo;
-        }).collect(Collectors.toList());
+        List<CinemaVO> records = buildCinemaVOList(pageResult.getRecords(), true);
 
         CinemaPageVO pageVO = new CinemaPageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -251,12 +247,14 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         int end = Math.min(start + size, sorted.size());
         List<Cinema> pageList = start < sorted.size() ? sorted.subList(start, end) : new ArrayList<>();
 
-        List<CinemaVO> records = pageList.stream().map(cinema -> {
-            CinemaVO vo = toVO(cinema);
-            vo.setDistance(haversine(lat, lng, cinema.getLatitude().doubleValue(), cinema.getLongitude().doubleValue()));
-            vo.setMinPrice(getMinPrice(cinema.getId()));
-            return vo;
-        }).collect(Collectors.toList());
+        List<CinemaVO> records = buildCinemaVOList(pageList, true);
+        Map<Long, Cinema> cinemaMap = pageList.stream()
+                .collect(Collectors.toMap(Cinema::getId, cinema -> cinema));
+        records.forEach(vo -> {
+            Cinema cinema = cinemaMap.get(vo.getId());
+            vo.setDistance(haversine(lat, lng,
+                    cinema.getLatitude().doubleValue(), cinema.getLongitude().doubleValue()));
+        });
 
         CinemaPageVO pageVO = new CinemaPageVO();
         pageVO.setTotal(sorted.size());
@@ -278,6 +276,67 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
             wrapper.eq(Cinema::getStatus, CinemaStatus.fromCode(status));
         }
         return wrapper;
+    }
+
+    /**
+     * 批量组装影院列表，统一查询影厅和在售场次，避免循环查库。
+     */
+    private List<CinemaVO> buildCinemaVOList(List<Cinema> cinemas, boolean includeShowtimeMetrics) {
+        if (cinemas.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> cinemaIds = cinemas.stream().map(Cinema::getId).toList();
+        List<Hall> halls = hallMapper.selectList(new LambdaQueryWrapper<Hall>()
+                .in(Hall::getCinemaId, cinemaIds));
+        Map<Long, List<Hall>> hallsByCinemaId = halls.stream()
+                .collect(Collectors.groupingBy(Hall::getCinemaId));
+
+        Map<Long, Integer> showtimeCountMap = new HashMap<>();
+        Map<Long, Integer> minPriceFenMap = new HashMap<>();
+        if (includeShowtimeMetrics && !halls.isEmpty()) {
+            Map<Long, Long> cinemaIdByHallId = halls.stream()
+                    .collect(Collectors.toMap(Hall::getId, Hall::getCinemaId));
+            List<Showtime> showtimes = showtimeMapper.selectList(new LambdaQueryWrapper<Showtime>()
+                    .in(Showtime::getHallId, cinemaIdByHallId.keySet())
+                    .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                    .select(Showtime::getHallId, Showtime::getBasePrice));
+            for (Showtime showtime : showtimes) {
+                Long cinemaId = cinemaIdByHallId.get(showtime.getHallId());
+                if (cinemaId == null) {
+                    continue;
+                }
+                showtimeCountMap.merge(cinemaId, 1, Integer::sum);
+                if (showtime.getBasePrice() != null) {
+                    minPriceFenMap.merge(cinemaId, showtime.getBasePrice(), Math::min);
+                }
+            }
+        }
+
+        return cinemas.stream().map(cinema -> {
+            CinemaVO vo = toBaseVO(cinema);
+            List<Hall> cinemaHalls = hallsByCinemaId.getOrDefault(cinema.getId(), List.of());
+            vo.setHallCount(cinemaHalls.size());
+            vo.setHallTypes(cinemaHalls.stream()
+                    .map(Hall::getHallType)
+                    .filter(Objects::nonNull)
+                    .map(type -> type.getCode())
+                    .distinct()
+                    .toList());
+            vo.setShowtimeCount(showtimeCountMap.getOrDefault(cinema.getId(), 0));
+            Integer minPriceFen = minPriceFenMap.get(cinema.getId());
+            vo.setMinPrice(minPriceFen == null ? null : minPriceFen / 100.0);
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    private CinemaVO toBaseVO(Cinema cinema) {
+        CinemaVO vo = new CinemaVO();
+        BeanUtils.copyProperties(cinema, vo);
+        vo.setStatus(cinema.getStatus() != null ? cinema.getStatus().getCode() : null);
+        vo.setStatusDesc(cinema.getStatus() != null ? cinema.getStatus().getDesc() : null);
+        vo.setServices(JSONUtil.toList(cinema.getServices(), String.class));
+        return vo;
     }
 
     private CinemaVO toVO(Cinema cinema) {
