@@ -32,7 +32,12 @@ public class TicketOrder {
     /** 订单金额（分） */
     private Integer amount;
 
-    /** 状态：PAYMENT_PENDING/PAID/TICKETED/CANCELLED/EXPIRED */
+    /* 状态：PAYMENT_PENDING/PAID/TICKETED/CANCELLED/EXPIRED */
+    /**  case "PAYMENT_PENDING" -> "待支付";
+     case "PAID" -> "已支付";
+     case "TICKETED" -> "已出票";
+     case "CANCELLED" -> "已取消";
+     case "EXPIRED" -> "已过期"; */
     private String status;
 
     /** 支付截止时间 */

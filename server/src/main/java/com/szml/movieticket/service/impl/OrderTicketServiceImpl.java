@@ -155,7 +155,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         order.setUserId(userId);
         order.setShowtimeId(showtimeId);
         order.setAmount(amount);
-        order.setStatus("PAYMENT_PENDING");
+        order.setStatus("PAYMENT_PENDING");//设置状态为待支付
         order.setExpiresAt(expiresAt);
         order.setRetryCount(0);
         orderMapper.insert(order);

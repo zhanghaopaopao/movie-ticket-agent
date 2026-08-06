@@ -193,11 +193,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
             }
 
             // 关联的电子票
-            List<com.szml.movieticket.entity.Ticket> tickets = ticketMapper.selectList(
-                    new LambdaQueryWrapper<com.szml.movieticket.entity.Ticket>()
-                            .eq(com.szml.movieticket.entity.Ticket::getOrderItemId, item.getId()));
+            List<Ticket> tickets = ticketMapper.selectList(
+                    new LambdaQueryWrapper<Ticket>()
+                            .eq(Ticket::getOrderItemId, item.getId()));
             if (!tickets.isEmpty()) {
-                itemVO.setTicketCode(tickets.get(0).getTicketCode());
+                itemVO.setTicketCode(tickets.getFirst().getTicketCode());
             }
 
             itemVOs.add(itemVO);
@@ -217,11 +217,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
         }
 
         // 电子票
-        List<com.szml.movieticket.entity.Ticket> allTickets = ticketMapper.selectList(
-                new LambdaQueryWrapper<com.szml.movieticket.entity.Ticket>()
-                        .eq(com.szml.movieticket.entity.Ticket::getOrderId, id));
+        List<Ticket> allTickets = ticketMapper.selectList(
+                new LambdaQueryWrapper<Ticket>()
+                        .eq(Ticket::getOrderId, id));
         List<OrderDetailVO.TicketInfoVO> ticketVOs = new ArrayList<>();
-        for (com.szml.movieticket.entity.Ticket ticket : allTickets) {
+        for (Ticket ticket : allTickets) {
             OrderDetailVO.TicketInfoVO ticketVO = new OrderDetailVO.TicketInfoVO();
             ticketVO.setTicketCode(ticket.getTicketCode());
             ticketVO.setQrContent(ticket.getQrContent());
