@@ -31,8 +31,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -58,7 +60,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         wrapper.orderByDesc(Movie::getReleaseDate);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
-        List<MovieVO> records = pageResult.getRecords().stream().map(this::toVO).collect(Collectors.toList());
+        List<MovieVO> records = buildMovieVOList(pageResult.getRecords());
 
         MoviePageVO pageVO = new MoviePageVO();
         pageVO.setTotal(pageResult.getTotal());
@@ -241,8 +243,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         applyUserMovieSort(wrapper, sortBy, sortOrder);
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
-        List<MovieVO> records = pageResult.getRecords().stream()
-                .map(this::toVO).collect(Collectors.toList());
+        List<MovieVO> records = buildMovieVOList(pageResult.getRecords());
         markWanted(userId, records);
 
         MoviePageVO pageVO = new MoviePageVO();
@@ -305,6 +306,50 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         return wrapper;
     }
 
+    private List<MovieVO> buildMovieVOList(List<Movie> movies) {
+        if (movies.isEmpty()) {
+            return List.of();
+        }
+
+        // 1. 收集所有影片ID，一次查所有在售场次
+        List<Long> movieIds = movies.stream().map(Movie::getId).toList();
+        List<Showtime> allShowtimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .in(Showtime::getMovieId, movieIds)
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+
+        // 2. 一次查所有相关影厅
+        Map<Long, Hall> hallMap = new HashMap<>();
+        if (!allShowtimes.isEmpty()) {
+            Set<Long> hallIds = allShowtimes.stream().map(Showtime::getHallId).collect(Collectors.toSet());
+            for (Hall h : hallMapper.selectBatchIds(hallIds)) {
+                hallMap.put(h.getId(), h);
+            }
+        }
+
+        // 3. 内存计算每部影片的场次数和覆盖影院数
+        Map<Long, Integer> showtimeCountMap = new HashMap<>();
+        Map<Long, Set<Long>> cinemaCountMap = new HashMap<>();
+        for (Showtime st : allShowtimes) {
+            showtimeCountMap.merge(st.getMovieId(), 1, Integer::sum);
+            Hall hall = hallMap.get(st.getHallId());
+            if (hall != null) {
+                cinemaCountMap.computeIfAbsent(st.getMovieId(), k -> new HashSet<>()).add(hall.getCinemaId());
+            }
+        }
+
+        // 4. 组装
+        return movies.stream().map(m -> {
+            MovieVO vo = new MovieVO();
+            BeanUtils.copyProperties(m, vo);
+            vo.setStatus(m.getStatus() != null ? m.getStatus().getCode() : null);
+            vo.setStatusDesc(m.getStatus() != null ? m.getStatus().getDesc() : null);
+            vo.setShowtimeCount(showtimeCountMap.getOrDefault(m.getId(), 0));
+            vo.setCinemaCount(cinemaCountMap.getOrDefault(m.getId(), Set.of()).size());
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
     private MovieVO toVO(Movie movie) {
         MovieVO vo = new MovieVO();
         BeanUtils.copyProperties(movie, vo);
@@ -318,12 +363,12 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
                         .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
         vo.setShowtimeCount(activeShowtimes.size());
 
-//        Set<Long> cinemaIds = new HashSet<>();
-//        for (Showtime st : activeShowtimes) {
-//            Hall hall = hallMapper.selectById(st.getHallId());
-//            if (hall != null) cinemaIds.add(hall.getCinemaId());
-//        }
-//        vo.setCinemaCount(cinemaIds.size());
+        Set<Long> cinemaIds = new HashSet<>();
+        for (Showtime st : activeShowtimes) {
+            Hall hall = hallMapper.selectById(st.getHallId());
+            if (hall != null) cinemaIds.add(hall.getCinemaId());
+        }
+        vo.setCinemaCount(cinemaIds.size());
         return vo;
     }
 

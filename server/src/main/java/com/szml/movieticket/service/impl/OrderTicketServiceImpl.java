@@ -601,6 +601,127 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         log.info("取消订单成功, userId: {}, orderId: {}", userId, orderId);
     }
 
+    /**
+     * 批量构建 C 端订单 VO，避免 N+1 循环查库。
+     */
+    private List<UserOrderVO> buildUserOrderVOList(List<TicketOrder> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        // 收集 IDs
+        Set<Long> showtimeIds = new HashSet<>();
+        Set<Long> orderIds = new HashSet<>();
+        for (TicketOrder o : orders) {
+            showtimeIds.add(o.getShowtimeId());
+            orderIds.add(o.getId());
+        }
+
+        // 1. 批量查 Showtime
+        Map<Long, Showtime> showtimeMap = new HashMap<>();
+        for (Showtime s : showtimeMapper.selectBatchIds(showtimeIds)) {
+            showtimeMap.put(s.getId(), s);
+        }
+
+        // 2. 收集 movieIds、hallIds
+        Set<Long> movieIds = new HashSet<>();
+        Set<Long> hallIds = new HashSet<>();
+        for (Showtime s : showtimeMap.values()) {
+            movieIds.add(s.getMovieId());
+            hallIds.add(s.getHallId());
+        }
+
+        // 3. 批量查 Movie（只查 id + name + poster）
+        Map<Long, Movie> movieMap = new HashMap<>();
+        if (!movieIds.isEmpty()) {
+            for (Movie m : movieMapper.selectBatchIds(movieIds)) {
+                movieMap.put(m.getId(), m);
+            }
+        }
+
+        // 4. 批量查 Hall + Cinema
+        Map<Long, Hall> hallMap = new HashMap<>();
+        Set<Long> cinemaIds = new HashSet<>();
+        if (!hallIds.isEmpty()) {
+            for (Hall h : hallMapper.selectBatchIds(hallIds)) {
+                hallMap.put(h.getId(), h);
+                cinemaIds.add(h.getCinemaId());
+            }
+        }
+        Map<Long, Cinema> cinemaMap = new HashMap<>();
+        if (!cinemaIds.isEmpty()) {
+            for (Cinema c : cinemaMapper.selectBatchIds(cinemaIds)) {
+                cinemaMap.put(c.getId(), c);
+            }
+        }
+
+        // 5. 批量查 OrderItem
+        Map<Long, List<OrderItem>> itemsByOrderId = new HashMap<>();
+        Set<Long> allInventorySeatIds = new HashSet<>();
+        for (OrderItem item : orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().in(OrderItem::getOrderId, orderIds))) {
+            itemsByOrderId.computeIfAbsent(item.getOrderId(), k -> new ArrayList<>()).add(item);
+            allInventorySeatIds.add(item.getSeatId());
+        }
+
+        // 6. 批量查 ShowtimeSeat + Seat（只查 rowNo/seatNo）
+        Map<Long, Long> inventoryToPhysicalSeat = new HashMap<>(); // inventoryId → physicalSeatId
+        if (!allInventorySeatIds.isEmpty()) {
+            for (ShowtimeSeat sts : showtimeSeatMapper.selectBatchIds(allInventorySeatIds)) {
+                inventoryToPhysicalSeat.put(sts.getId(), sts.getSeatId());
+            }
+        }
+        Set<Long> physicalSeatIds = new HashSet<>(inventoryToPhysicalSeat.values());
+        Map<Long, Seat> seatMap = new HashMap<>();
+        if (!physicalSeatIds.isEmpty()) {
+            for (Seat s : seatMapper.selectBatchIds(physicalSeatIds)) {
+                seatMap.put(s.getId(), s);
+            }
+        }
+
+        // 7. 组装
+        return orders.stream().map(order -> {
+            UserOrderVO vo = new UserOrderVO();
+            vo.setId(order.getId());
+            vo.setOrderNo(order.getOrderNo());
+            vo.setAmount(AmountUtil.yuan(order.getAmount()));
+            vo.setStatus(order.getStatus());
+            vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
+            vo.setExpiresAt(order.getExpiresAt());
+            vo.setCreateTime(order.getCreateTime());
+
+            Showtime showtime = showtimeMap.get(order.getShowtimeId());
+            if (showtime != null) {
+                vo.setStartAt(showtime.getStartAt());
+                Movie movie = movieMap.get(showtime.getMovieId());
+                if (movie != null) {
+                    vo.setMovieName(movie.getName());
+                    vo.setPoster(movie.getPoster());
+                }
+                Hall hall = hallMap.get(showtime.getHallId());
+                if (hall != null) {
+                    vo.setHallName(hall.getName());
+                    Cinema cinema = cinemaMap.get(hall.getCinemaId());
+                    if (cinema != null) vo.setCinemaName(cinema.getName());
+                }
+            }
+
+            List<OrderItem> items = itemsByOrderId.getOrDefault(order.getId(), List.of());
+            List<String> seatLabels = new ArrayList<>();
+            for (OrderItem item : items) {
+                Long physicalSeatId = inventoryToPhysicalSeat.get(item.getSeatId());
+                if (physicalSeatId != null) {
+                    Seat seat = seatMap.get(physicalSeatId);
+                    if (seat != null) {
+                        seatLabels.add(seat.getRowNo() + "排" + seat.getSeatNo() + "座");
+                    }
+                }
+            }
+            vo.setSeatSummary(String.join(", ", seatLabels));
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
     @Override
     public UserOrderPageVO listOrders(Long userId, int page, int size, String status) {
         LambdaQueryWrapper<TicketOrder> wrapper = new LambdaQueryWrapper<TicketOrder>()
@@ -613,45 +734,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         Page<TicketOrder> pageResult = new Page<>(page, size);
         orderMapper.selectPage(pageResult, wrapper);
 
-        List<UserOrderVO> records = pageResult.getRecords().stream().map(order -> {
-            UserOrderVO vo = new UserOrderVO();
-            vo.setId(order.getId());
-            vo.setOrderNo(order.getOrderNo());
-            vo.setAmount(AmountUtil.yuan(order.getAmount()));
-            vo.setStatus(order.getStatus());
-            vo.setStatusDesc(OrderStatusUtil.statusDesc(order.getStatus()));
-            vo.setExpiresAt(order.getExpiresAt());
-            vo.setCreateTime(order.getCreateTime());
-
-            Showtime showtime = showtimeMapper.selectById(order.getShowtimeId());
-            if (showtime != null) {
-                vo.setStartAt(showtime.getStartAt());
-                Movie movie = movieMapper.selectById(showtime.getMovieId());
-                if (movie != null) vo.setMovieName(movie.getName());
-                Hall hall = hallMapper.selectById(showtime.getHallId());
-                if (hall != null) {
-                    vo.setHallName(hall.getName());
-                    Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
-                    if (cinema != null) vo.setCinemaName(cinema.getName());
-                }
-            }
-
-            // 座位摘要
-            List<OrderItem> items = orderItemMapper.selectList(
-                    new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, order.getId()));
-            List<String> seatLabels = new ArrayList<>();
-            for (OrderItem item : items) {
-                ShowtimeSeat sts = showtimeSeatMapper.selectById(item.getSeatId());
-                if (sts != null) {
-                    Seat seat = seatMapper.selectById(sts.getSeatId());
-                    if (seat != null) {
-                        seatLabels.add(seat.getRowNo() + "排" + seat.getSeatNo() + "座");
-                    }
-                }
-            }
-            vo.setSeatSummary(String.join(", ", seatLabels));
-            return vo;
-        }).collect(Collectors.toList());
+        List<UserOrderVO> records = buildUserOrderVOList(pageResult.getRecords());
 
         UserOrderPageVO pageVO = new UserOrderPageVO();
         pageVO.setTotal(pageResult.getTotal());
