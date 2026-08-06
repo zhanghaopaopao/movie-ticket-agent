@@ -43,6 +43,12 @@ public class OrderDetailVO {
     /** 座位明细 */
     private List<OrderItemVO> items;
 
+    /** 订单中的零食快照。 */
+    private List<SnackOrderItemVO> snacks;
+
+    /** 零食金额，单位元。 */
+    private Double snackAmount;
+
     /** 金额（元） */
     private Double amount;
 

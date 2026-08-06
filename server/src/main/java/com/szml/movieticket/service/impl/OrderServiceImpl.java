@@ -8,6 +8,7 @@ import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.exception.OrderException;
 import com.szml.movieticket.mapper.*;
 import com.szml.movieticket.service.OrderService;
+import com.szml.movieticket.service.OrderSnackService;
 import com.szml.movieticket.vo.OrderDetailVO;
 import com.szml.movieticket.vo.OrderPageVO;
 import com.szml.movieticket.vo.OrderVO;
@@ -45,6 +46,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
     private final CinemaMapper cinemaMapper;
     private final ShowtimeSeatMapper showtimeSeatMapper;
     private final SeatMapper seatMapper;
+    private final OrderSnackService orderSnackService;
 
 
     @Override
@@ -203,6 +205,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, TicketOrder> impl
             itemVOs.add(itemVO);
         }
         vo.setItems(itemVOs);
+        vo.setSnacks(orderSnackService.listOrderItems(id));
+        vo.setSnackAmount(AmountUtil.yuan(orderSnackService.getSnackAmountFen(id)));
 
         // 支付
         Payment payment = paymentMapper.selectOne(

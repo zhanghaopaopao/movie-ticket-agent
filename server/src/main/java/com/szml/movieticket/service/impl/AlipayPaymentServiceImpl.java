@@ -44,10 +44,12 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
         bizContent.put("total_amount", BigDecimal.valueOf(amountFen, 2)
                 .setScale(2, RoundingMode.HALF_UP).toPlainString());
         bizContent.put("subject", subject);
-        bizContent.put("product_code", "QUICK_WAP_PAY");
+        bizContent.put("product_code", "QUICK_WAP_WAY");
         bizContent.put("quit_url", properties.getReturnUrl());
         try {
             request.setBizContent(objectMapper.writeValueAsString(bizContent));
+            // WAP checkout must be submitted as the SDK-generated HTML form so the
+            // sandbox can preserve the signed request through its login redirect.
             AlipayTradeWapPayResponse response = getClient().pageExecute(request);
             if (response == null || response.getBody() == null || response.getBody().isBlank()) {
                 throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);

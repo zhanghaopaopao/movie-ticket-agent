@@ -9,6 +9,7 @@ import com.szml.movieticket.exception.OrderException;
 import com.szml.movieticket.mapper.*;
 import com.szml.movieticket.service.OrderTicketService;
 import com.szml.movieticket.service.AlipayPaymentService;
+import com.szml.movieticket.service.OrderSnackService;
 import com.szml.movieticket.vo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,6 +78,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
     private final CinemaMapper cinemaMapper;
     private final PurchaseDraftMapper draftMapper;
     private final AlipayPaymentService alipayPaymentService;
+    private final OrderSnackService orderSnackService;
 
     @Override
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -268,19 +270,23 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             payment = new Payment();
             payment.setOrderId(orderId);
         }
-        String outTradeNo = payment.getOutTradeNo();
-        if ("FAIL".equals(payment.getStatus()) || "CLOSED".equals(payment.getStatus())) {
-            outTradeNo = order.getOrderNo() + "-" + System.currentTimeMillis();
+        String requestIdempotencyKey = idempotencyKey == null ? "" : idempotencyKey.trim();
+        boolean sameAttempt = "PENDING".equals(payment.getStatus())
+                && !requestIdempotencyKey.isBlank()
+                && requestIdempotencyKey.equals(payment.getIdempotencyKey())
+                && payment.getOutTradeNo() != null
+                && !payment.getOutTradeNo().isBlank();
+        String outTradeNo = sameAttempt
+                ? payment.getOutTradeNo()
+                : buildPaymentTradeNo(order.getOrderNo());
+        if (!sameAttempt) {
+            // 支付宝沙箱可能保留上一次异常跳转的待支付交易，新尝试必须使用新的商户订单号。
             payment.setTradeNo(null);
-        } else if (outTradeNo == null || outTradeNo.isBlank()) {
-            outTradeNo = order.getOrderNo();
         }
         payment.setProvider("ALIPAY_SANDBOX");
         payment.setOutTradeNo(outTradeNo);
         payment.setSubject(subject);
-        if (payment.getIdempotencyKey() == null || payment.getIdempotencyKey().isBlank()) {
-            payment.setIdempotencyKey(idempotencyKey);
-        }
+        payment.setIdempotencyKey(requestIdempotencyKey);
         payment.setStatus("PENDING");
         payment.setAmount(order.getAmount());
         payment.setProcessedAt(null);
@@ -416,6 +422,9 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         order.setStatus("PAID");
         orderMapper.updateById(order);
 
+        // 支付成功后把预占库存转为售出，并累计商品销量。
+        orderSnackService.markSold(orderId);
+
         // 座位 → SOLD
         List<OrderItem> items = orderItemMapper.selectList(
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, orderId));
@@ -537,6 +546,9 @@ public class OrderTicketServiceImpl implements OrderTicketService {
 
         order.setStatus("CANCELLED");
         orderMapper.updateById(order);
+
+        // 取消订单时释放预占的零食库存，保留明细快照。
+        orderSnackService.releaseReserved(orderId);
 
         Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
                 .eq(Payment::getOrderId, orderId)
@@ -686,6 +698,8 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             itemVOs.add(itemVO);
         }
         vo.setItems(itemVOs);
+        vo.setSnacks(orderSnackService.listOrderItems(orderId));
+        vo.setSnackAmount(AmountUtil.yuan(orderSnackService.getSnackAmountFen(orderId)));
 
         // 支付
         Payment payment = paymentMapper.selectOne(
@@ -730,6 +744,12 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         SecureRandom random = new SecureRandom();
         for (int i = 0; i < 6; i++) code.append(random.nextInt(10));
         return timestamp + code;
+    }
+
+    /** 生成每次支付宝支付尝试使用的唯一商户订单号。 */
+    private static String buildPaymentTradeNo(String orderNo) {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        return orderNo + "-" + suffix;
     }
 
 }
