@@ -180,7 +180,7 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         }
 
         // 冻结草稿
-        draft.setStatus("FROZEN");
+        draft.setStatus("FROZEN");//草稿冻结状态
         draft.setOrderId(order.getId());
         draft.setVersion(draft.getVersion() + 1);
         draftMapper.updateById(draft);
