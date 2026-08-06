@@ -4,7 +4,9 @@ import com.alipay.api.AlipayClient;
 import com.alipay.api.AlipayConfig;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.internal.util.AlipaySignature;
+import com.alipay.api.request.AlipayTradePrecreateRequest;
 import com.alipay.api.request.AlipayTradeWapPayRequest;
+import com.alipay.api.response.AlipayTradePrecreateResponse;
 import com.alipay.api.response.AlipayTradeWapPayResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +64,42 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
         } catch (Exception e) {
             log.error("Failed to create Alipay WAP payment, outTradeNo={}", outTradeNo, e);
+            throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
+        }
+    }
+
+    @Override
+    public String createPrecreateQrCode(String outTradeNo, String subject, Integer amountFen) {
+        ensureConfigured();
+        AlipayTradePrecreateRequest request = new AlipayTradePrecreateRequest();
+        request.setNotifyUrl(properties.getNotifyUrl());
+
+        Map<String, Object> bizContent = new LinkedHashMap<>();
+        bizContent.put("out_trade_no", outTradeNo);
+        bizContent.put("total_amount", BigDecimal.valueOf(amountFen, 2)
+                .setScale(2, RoundingMode.HALF_UP).toPlainString());
+        bizContent.put("subject", subject);
+        bizContent.put("product_code", "FACE_TO_FACE_PAYMENT");
+        try {
+            request.setBizContent(objectMapper.writeValueAsString(bizContent));
+            AlipayTradePrecreateResponse response = getClient().execute(request);
+            if (response == null || !response.isSuccess()
+                    || response.getQrCode() == null || response.getQrCode().isBlank()) {
+                log.error(
+                        "Alipay precreate did not return a QR code, outTradeNo={}, subCode={}, subMsg={}",
+                        outTradeNo,
+                        response == null ? null : response.getSubCode(),
+                        response == null ? null : response.getSubMsg());
+                throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
+            }
+            return response.getQrCode();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (JsonProcessingException e) {
+            log.error("Failed to build Alipay precreate request, outTradeNo={}", outTradeNo, e);
+            throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
+        } catch (Exception e) {
+            log.error("Failed to create Alipay precreate payment, outTradeNo={}", outTradeNo, e);
             throw new BusinessException(ErrorCode.PAYMENT_PROVIDER_ERROR);
         }
     }
