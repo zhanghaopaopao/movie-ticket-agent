@@ -1,15 +1,15 @@
 package com.szml.movieticket.scheduler;
 
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.szml.movieticket.entity.*;
-import com.szml.movieticket.entity.SeatLockLog;
 import com.szml.movieticket.mapper.*;
+import com.szml.movieticket.service.OrderSnackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import com.szml.movieticket.service.OrderSnackService;
 
 import java.time.LocalDateTime;
 import java.util.List;

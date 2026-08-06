@@ -233,6 +233,11 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
 
+        // 售罄为终态，不允许再变更
+        if (showtime.getStatus() == ShowtimeStatus.SOLD_OUT_ALL) {
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HAS_LOCKED_SEATS);
+        }
+
         // 有已锁定座位时不允许变更状态（已售不影响，管理员可以手动停售）
         long lockedCount = showtimeSeatMapper.selectCount(
                 new LambdaQueryWrapper<ShowtimeSeat>()

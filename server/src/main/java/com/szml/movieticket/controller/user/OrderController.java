@@ -50,13 +50,13 @@ public class OrderController {
     /**
      * 创建支付宝沙箱二维码支付。
      */
-    @PostMapping("/{id}/pay/qrcode")
-    public Result<PaymentInitVO> payQrCode(@PathVariable Long id, @Valid @RequestBody PayDTO dto) {
-        Long userId = UserContext.getUserId();
-        log.info("二维码支付请求, 用户ID: {}, 订单ID: {}", userId, id);
-        PaymentInitVO result = orderTicketService.createQrPayment(userId, id, dto.getIdempotencyKey());
-        return Result.success(result);
-    }
+//    @PostMapping("/{id}/pay/qrcode")
+//    public Result<PaymentInitVO> payQrCode(@PathVariable Long id, @Valid @RequestBody PayDTO dto) {
+//        Long userId = UserContext.getUserId();
+//        log.info("二维码支付请求, 用户ID: {}, 订单ID: {}", userId, id);
+//        PaymentInitVO result = orderTicketService.createQrPayment(userId, id, dto.getIdempotencyKey());
+//        return Result.success(result);
+//    }
 
     /**
      * 取消订单。

@@ -484,6 +484,19 @@ public class OrderTicketServiceImpl implements OrderTicketService {
         order.setStatus("TICKETED");
         orderMapper.updateById(order);
 
+        // 检查该场次是否全部售完，自动标为售罄
+        if (payShowtime != null && payShowtime.getStatus() == ShowtimeStatus.ON_SALE) {
+            long remainCount = showtimeSeatMapper.selectCount(
+                    new LambdaQueryWrapper<ShowtimeSeat>()
+                            .eq(ShowtimeSeat::getShowtimeId, payShowtime.getId())
+                            .ne(ShowtimeSeat::getStatus, 2));
+            if (remainCount <= 0) {
+                payShowtime.setStatus(ShowtimeStatus.SOLD_OUT_ALL);
+                showtimeMapper.updateById(payShowtime);
+                log.info("场次自动售罄, showtimeId: {}", payShowtime.getId());
+            }
+        }
+
         log.info("支付成功, userId: {}, orderId: {}, idempotencyKey: {}", userId, orderId, idempotencyKey);
         return buildPaidResult(order);
     }
