@@ -30,11 +30,11 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         RefundPreparation preparation = refundTransactionService.prepare(userId, orderId);
         PaymentRefund refund = preparation.refund();
         if (PaymentRefund.SUCCESS.equals(refund.getStatus())) {
-            return refundTransactionService.getStatus(userId, orderId);
+            return refundTransactionService.getStatus(userId, orderId);//成功返回
         }
 
         try {
-            AlipayRefundResult providerResult = preparation.shouldSubmit()
+            AlipayRefundResult providerResult = preparation.shouldSubmit()//分两个分支进行,第一次退款,退款异常情况
                     ? alipayPaymentService.refund(
                     refund.getOutTradeNo(), refund.getTradeNo(), refund.getOutRequestNo(), refund.getRefundAmountFen())
                     : alipayPaymentService.queryRefund(
@@ -44,7 +44,7 @@ public class OrderRefundServiceImpl implements OrderRefundService {
             // 未配置支付渠道时，本次退款根本没有提交给支付宝，必须立即恢复电子票与订单状态。
             if (e.getCode() == ErrorCode.PAYMENT_NOT_CONFIGURED.getCode()) {
                 refundTransactionService.markFailure(refund.getId(), "PAYMENT_NOT_CONFIGURED", e.getMessage());
-            }
+            }//兜底情况
             throw e;
         }
     }

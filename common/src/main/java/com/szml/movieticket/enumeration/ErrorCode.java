@@ -99,6 +99,7 @@ public enum ErrorCode {
     PAYMENT_IDEMPOTENT_REPLAY(6004, "请勿重复支付"),
     PAYMENT_NOT_CONFIGURED(6005, "支付宝沙箱支付尚未配置"),
     PAYMENT_PROVIDER_ERROR(6006, "支付宝支付服务暂时不可用"),
+    ORDER_REFUND_TOO_LATE(6007, "距离开场不足30分钟，不可退票"),
 
     // ---- 草稿（7000-7999）----
 

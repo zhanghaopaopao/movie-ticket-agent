@@ -32,6 +32,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -77,19 +78,19 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
         }
 
         PaymentRefund latestRefund = findLatestRefund(orderId);//取最新一条退款记录的状态
-        if ("REFUNDED".equals(order.getStatus())) {
+        if ("REFUNDED".equals(order.getStatus())) {//已退票
             if (latestRefund != null) {
                 return new RefundPreparation(latestRefund, false);
             }
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
-        if ("REFUND_PENDING".equals(order.getStatus())) {
+        if ("REFUND_PENDING".equals(order.getStatus())) {//退款处理中
             if (latestRefund != null && PaymentRefund.PENDING.equals(latestRefund.getStatus())) {
                 return new RefundPreparation(latestRefund, false);
             }
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
-        if (!"TICKETED".equals(order.getStatus())) {
+        if (!"TICKETED".equals(order.getStatus())) {//没有付钱的状态,直接拒绝
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
 
@@ -98,11 +99,18 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
 
+        // 退票时间限制：距离开场不足30分钟不可退票
+        long minutesUntilStart = java.time.Duration.between(LocalDateTime.now(), showtime.getStartAt()).toMinutes();
+        if (minutesUntilStart < 30) {
+            throw new OrderException(ErrorCode.ORDER_REFUND_TOO_LATE);
+        }
+        int feePercent = minutesUntilStart >= 24 * 60 ? 5 : 10;
+
         List<Ticket> tickets = ticketMapper.selectList(new LambdaQueryWrapper<Ticket>()
                 .eq(Ticket::getOrderId, orderId));
         if (tickets.isEmpty() || tickets.stream().anyMatch(ticket -> !Integer.valueOf(TICKET_VALID).equals(ticket.getStatus()))) {
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
-        }
+        }//电子票已使用状态不允许退款
 
         Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
                 .eq(Payment::getOrderId, orderId)
@@ -116,13 +124,22 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
             throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
         }
 
+        // 计算手续费和实退金额
+        int originalAmountFen = payment.getAmount();
+        BigDecimal amountYuan = new BigDecimal(originalAmountFen).movePointLeft(2);
+        BigDecimal serviceFeeYuan = amountYuan.multiply(new BigDecimal(feePercent)).movePointLeft(2);
+        BigDecimal refundYuan = amountYuan.subtract(serviceFeeYuan);
+        int serviceFeeFen = serviceFeeYuan.movePointRight(2).setScale(0, java.math.RoundingMode.HALF_UP).intValue();
+        int refundFen = refundYuan.movePointRight(2).setScale(0, java.math.RoundingMode.HALF_UP).intValue();
+
         PaymentRefund refund = new PaymentRefund();
         refund.setPaymentId(payment.getId());
         refund.setOrderId(orderId);
         refund.setOutRequestNo(buildOutRequestNo(order.getOrderNo()));
         refund.setOutTradeNo(payment.getOutTradeNo());
         refund.setTradeNo(payment.getTradeNo());
-        refund.setRefundAmountFen(payment.getAmount());
+        refund.setRefundAmountFen(refundFen);
+        refund.setServiceFeeFen(serviceFeeFen);
         refund.setStatus(PaymentRefund.PENDING);
         refund.setQueryCount(0);
         paymentRefundMapper.insert(refund);
@@ -132,7 +149,7 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
             ticket.setStatus(TICKET_REFUND_PENDING);
             ticketMapper.updateById(ticket);
         }
-        order.setStatus("REFUND_PENDING");
+        order.setStatus("REFUND_PENDING");//更改为退票中的状态
         orderMapper.updateById(order);
 
         log.info("退款申请已冻结本地订单, orderId={}, refundId={}", orderId, refund.getId());
@@ -339,6 +356,7 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
         result.setOrderId(refund.getOrderId());
         result.setStatus(refund.getStatus());
         result.setAmount(AmountUtil.yuan(refund.getRefundAmountFen()));
+        result.setServiceFee(AmountUtil.yuan(refund.getServiceFeeFen()));
         result.setOutRequestNo(refund.getOutRequestNo());
         result.setUpdatedAt(refund.getUpdateTime() != null ? refund.getUpdateTime() : refund.getProcessedAt());
         if (PaymentRefund.SUCCESS.equals(refund.getStatus())) {

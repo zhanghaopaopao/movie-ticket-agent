@@ -16,6 +16,9 @@ public class RefundResultVO {
     /** 退款金额，单位为元。 */
     private Double amount;
 
+    /** 手续费，单位为元。 */
+    private Double serviceFee;
+
     private String outRequestNo;
 
     /** 面向用户的结果说明。 */

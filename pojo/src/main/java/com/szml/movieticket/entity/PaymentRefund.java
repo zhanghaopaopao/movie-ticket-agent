@@ -37,6 +37,9 @@ public class PaymentRefund {
     /** 请求退款金额，单位为分。 */
     private Integer refundAmountFen;
 
+    /** 手续费，单位为分。 */
+    private Integer serviceFeeFen;
+
     /** 支付宝实际返回的退款金额，单位为分。 */
     private Integer actualAmountFen;
 
