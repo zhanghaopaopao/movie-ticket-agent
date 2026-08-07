@@ -65,4 +65,10 @@ public interface MovieService extends IService<Movie> {
      * C端影片详情（含 todayShowtimeCoverage）。
      */
     MovieVO getMovieDetailForUser(Long userId, Long id);
+
+    /**
+     * Agent 影片查询（仅返回有在售场次的影片，无场次的不返回）。
+     */
+    MoviePageVO listMoviesWithShowtimes(Long userId, int page, int size, String genre, String keyword,
+                                        String sortBy, String sortOrder);
 }

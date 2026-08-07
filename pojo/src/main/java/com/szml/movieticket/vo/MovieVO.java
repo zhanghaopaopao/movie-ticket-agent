@@ -5,6 +5,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 影片 VO。
@@ -56,6 +57,9 @@ public class MovieVO {
 
     /** 当前登录用户是否已加入想看。 */
     private Boolean wanted;
+
+    /** 近期场次摘要（Agent 专用，每部影片最多返回几条，C 端不使用）。 */
+    private List<ShowtimeSummaryVO> upcomingShowtimes;
 
     /** 创建时间 */
     private LocalDateTime createTime;

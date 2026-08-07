@@ -6,11 +6,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.szml.movieticket.dto.MovieCreateDTO;
 import com.szml.movieticket.dto.MovieStatusDTO;
 import com.szml.movieticket.dto.MovieUpdateDTO;
+import com.szml.movieticket.entity.Cinema;
 import com.szml.movieticket.entity.Hall;
 import com.szml.movieticket.entity.Movie;
 import com.szml.movieticket.entity.Showtime;
 import com.szml.movieticket.entity.UserMovieWishlist;
 import com.szml.movieticket.enumeration.ErrorCode;
+import com.szml.movieticket.util.AmountUtil;
 import com.szml.movieticket.enums.MovieStatus;
 import com.szml.movieticket.enums.ShowtimeStatus;
 import com.szml.movieticket.exception.MovieException;
@@ -23,6 +25,7 @@ import com.szml.movieticket.service.MovieService;
 import com.szml.movieticket.vo.MovieOptionVO;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
+import com.szml.movieticket.vo.ShowtimeSummaryVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -30,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -251,6 +255,97 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         pageVO.setPage(page);
         pageVO.setSize(size);
         pageVO.setRecords(records);
+        return pageVO;
+    }
+
+    @Override
+    public MoviePageVO listMoviesWithShowtimes(Long userId, int page, int size, String genre, String keyword,
+                                               String sortBy, String sortOrder) {
+        int fetchSize = Math.max(size * 2, 50);
+        LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(genre)) {
+            wrapper.like(Movie::getGenre, genre);
+        }
+        if (StringUtils.hasText(keyword)) {
+            wrapper.like(Movie::getName, keyword);
+        }
+        applyUserMovieSort(wrapper, sortBy, sortOrder);
+
+        Page<Movie> pageResult = page(new Page<>(1, fetchSize), wrapper);
+        List<Movie> movies = pageResult.getRecords();
+        if (movies.isEmpty()) {
+            MoviePageVO empty = new MoviePageVO();
+            empty.setTotal(0); empty.setPage(page); empty.setSize(size); empty.setRecords(List.of());
+            return empty;
+        }
+
+        // 只查询未来有在售场次
+        List<Long> movieIds = movies.stream().map(Movie::getId).toList();
+        List<Showtime> futureShowtimes = showtimeMapper.selectList(
+                new LambdaQueryWrapper<Showtime>()
+                        .in(Showtime::getMovieId, movieIds)
+                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                        .gt(Showtime::getStartAt, LocalDateTime.now())
+                        .orderByAsc(Showtime::getStartAt));
+
+        // 一次性查影厅和影院，避免 N+1
+        Set<Long> hallIds = futureShowtimes.stream().map(Showtime::getHallId).collect(Collectors.toSet());
+        Map<Long, Hall> hallMap = new HashMap<>();
+        Map<Long, String> cinemaNameMap = new HashMap<>();
+        if (!hallIds.isEmpty()) {
+            for (Hall h : hallMapper.selectBatchIds(hallIds)) {
+                hallMap.put(h.getId(), h);
+                if (!cinemaNameMap.containsKey(h.getCinemaId())) {
+                    Cinema cinema = cinemaMapper.selectById(h.getCinemaId());
+                    if (cinema != null) {
+                        cinemaNameMap.put(h.getCinemaId(), cinema.getName());
+                    }
+                }
+            }
+        }
+
+        // 按 movieId 分组场次，每部影片最多 5 场
+        Map<Long, List<ShowtimeSummaryVO>> showtimeMap = new HashMap<>();
+        for (Showtime st : futureShowtimes) {
+            List<ShowtimeSummaryVO> list = showtimeMap.computeIfAbsent(
+                    st.getMovieId(), k -> new ArrayList<>());
+            if (list.size() >= 5) continue;
+            Hall hall = hallMap.get(st.getHallId());
+            ShowtimeSummaryVO summary = new ShowtimeSummaryVO();
+            summary.setShowtimeId(st.getId());
+            summary.setHallName(hall != null ? hall.getName() : null);
+            if (hall != null) {
+                summary.setCinemaName(cinemaNameMap.get(hall.getCinemaId()));
+            }
+            summary.setStartAt(st.getStartAt());
+            summary.setPrice(st.getBasePrice() != null
+                    ? String.format("%.2f", AmountUtil.yuan(st.getBasePrice()))
+                    : null);
+            summary.setRemainingSeats(null); // Agent 不需要精确余量
+            list.add(summary);
+        }
+
+        Set<Long> moviesWithFutureShowtimes = showtimeMap.keySet();
+
+        List<MovieVO> allRecords = buildMovieVOList(movies);
+        List<MovieVO> withShowtimes = allRecords.stream()
+                .filter(m -> moviesWithFutureShowtimes.contains(m.getId()))
+                .peek(m -> m.setUpcomingShowtimes(showtimeMap.get(m.getId())))
+                .collect(Collectors.toList());
+
+        int total = withShowtimes.size();
+        int fromIndex = (page - 1) * size;
+        int toIndex = Math.min(fromIndex + size, total);
+        List<MovieVO> pageRecords = fromIndex < total
+                ? withShowtimes.subList(fromIndex, toIndex)
+                : List.of();
+        markWanted(userId, pageRecords);
+
+        MoviePageVO pageVO = new MoviePageVO();
+        pageVO.setTotal(total);
+        pageVO.setPage(page);
+        pageVO.setSize(size);
+        pageVO.setRecords(pageRecords);
         return pageVO;
     }
 
