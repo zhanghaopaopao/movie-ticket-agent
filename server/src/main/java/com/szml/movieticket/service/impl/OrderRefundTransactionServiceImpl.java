@@ -72,11 +72,11 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
     @Transactional
     public RefundPreparation prepare(Long userId, Long orderId) {
         TicketOrder order = orderMapper.selectForUpdate(orderId);
-        if (order == null || !Objects.equals(order.getUserId(), userId)) {
+        if (order == null || !Objects.equals(order.getUserId(), userId)) {//查询订单
             throw new OrderException(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        PaymentRefund latestRefund = findLatestRefund(orderId);
+        PaymentRefund latestRefund = findLatestRefund(orderId);//取最新一条退款记录的状态
         if ("REFUNDED".equals(order.getStatus())) {
             if (latestRefund != null) {
                 return new RefundPreparation(latestRefund, false);
