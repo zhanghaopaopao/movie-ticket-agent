@@ -4,9 +4,13 @@ import com.alipay.api.AlipayClient;
 import com.alipay.api.AlipayConfig;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.internal.util.AlipaySignature;
+import com.alipay.api.request.AlipayTradeFastpayRefundQueryRequest;
 import com.alipay.api.request.AlipayTradePrecreateRequest;
+import com.alipay.api.request.AlipayTradeRefundRequest;
 import com.alipay.api.request.AlipayTradeWapPayRequest;
+import com.alipay.api.response.AlipayTradeFastpayRefundQueryResponse;
 import com.alipay.api.response.AlipayTradePrecreateResponse;
+import com.alipay.api.response.AlipayTradeRefundResponse;
 import com.alipay.api.response.AlipayTradeWapPayResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +18,7 @@ import com.szml.movieticket.config.AlipayProperties;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.exception.BusinessException;
 import com.szml.movieticket.service.AlipayPaymentService;
+import com.szml.movieticket.service.model.AlipayRefundResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -130,6 +135,111 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
             log.warn("Failed to verify Alipay notification", e);
             return false;
         }
+    }
+
+    @Override
+    public AlipayRefundResult refund(String outTradeNo, String tradeNo, String outRequestNo, Integer amountFen) {
+        ensureConfigured();
+        if (amountFen == null || amountFen <= 0) {
+            return AlipayRefundResult.fail("INVALID_AMOUNT", "退款金额不合法");
+        }
+
+        AlipayTradeRefundRequest request = new AlipayTradeRefundRequest();
+        Map<String, Object> bizContent = new LinkedHashMap<>();
+        bizContent.put("out_trade_no", outTradeNo);
+        bizContent.put("trade_no", tradeNo);
+        bizContent.put("out_request_no", outRequestNo);
+        bizContent.put("refund_amount", BigDecimal.valueOf(amountFen, 2)
+                .setScale(2, RoundingMode.HALF_UP).toPlainString());
+        bizContent.put("refund_reason", "电影票整单退票");
+        try {
+            request.setBizContent(objectMapper.writeValueAsString(bizContent));
+            AlipayTradeRefundResponse response = getClient().execute(request);
+            if (response == null) {
+                return AlipayRefundResult.pending("EMPTY_RESPONSE", "支付宝未返回退款结果");
+            }
+            if (!response.isSuccess()) {
+                return AlipayRefundResult.fail(
+                        firstNonBlank(response.getSubCode(), response.getCode()),
+                        firstNonBlank(response.getSubMsg(), response.getMsg(), "支付宝退款失败"));
+            }
+            Integer actualAmountFen = toFen(response.getRefundFee());
+            if (actualAmountFen == null || !actualAmountFen.equals(amountFen)) {
+                log.error("支付宝退款金额不匹配, outRequestNo={}, expected={}, actual={}",
+                        outRequestNo, amountFen, response.getRefundFee());
+                return AlipayRefundResult.pending("AMOUNT_MISMATCH", "支付宝退款金额待核验");
+            }
+            return AlipayRefundResult.success(BigDecimal.valueOf(actualAmountFen, 2), "支付宝退款成功");
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            // 网络超时无法判断支付宝是否已经受理，必须保留待对账状态。
+            log.warn("调用支付宝退款结果不确定, outRequestNo={}", outRequestNo, e);
+            return AlipayRefundResult.pending("REQUEST_UNKNOWN", "支付宝退款结果待确认");
+        }
+    }
+
+    @Override
+    public AlipayRefundResult queryRefund(String outTradeNo, String tradeNo, String outRequestNo, Integer amountFen) {
+        ensureConfigured();
+        if (amountFen == null || amountFen <= 0) {
+            return AlipayRefundResult.fail("INVALID_AMOUNT", "退款金额不合法");
+        }
+
+        AlipayTradeFastpayRefundQueryRequest request = new AlipayTradeFastpayRefundQueryRequest();
+        Map<String, Object> bizContent = new LinkedHashMap<>();
+        bizContent.put("out_trade_no", outTradeNo);
+        bizContent.put("trade_no", tradeNo);
+        bizContent.put("out_request_no", outRequestNo);
+        try {
+            request.setBizContent(objectMapper.writeValueAsString(bizContent));
+            AlipayTradeFastpayRefundQueryResponse response = getClient().execute(request);
+            if (response == null) {
+                return AlipayRefundResult.pending("EMPTY_RESPONSE", "支付宝未返回退款查询结果");
+            }
+            if (!response.isSuccess()) {
+                // 刚提交的退款在支付宝侧尚未可查询时也会进入这里，不能直接恢复订单。
+                return AlipayRefundResult.pending(
+                        firstNonBlank(response.getSubCode(), response.getCode()),
+                        firstNonBlank(response.getSubMsg(), response.getMsg(), "支付宝退款仍在处理中"));
+            }
+            if (!"REFUND_SUCCESS".equals(response.getRefundStatus())
+                    && !"SUCCESS".equals(response.getRefundStatus())) {
+                return AlipayRefundResult.pending("REFUND_PROCESSING", "支付宝退款仍在处理中");
+            }
+            Integer actualAmountFen = toFen(response.getRefundAmount());
+            if (actualAmountFen == null || !actualAmountFen.equals(amountFen)) {
+                log.error("支付宝退款查询金额不匹配, outRequestNo={}, expected={}, actual={}",
+                        outRequestNo, amountFen, response.getRefundAmount());
+                return AlipayRefundResult.pending("AMOUNT_MISMATCH", "支付宝退款金额待核验");
+            }
+            return AlipayRefundResult.success(BigDecimal.valueOf(actualAmountFen, 2), "支付宝退款成功");
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("查询支付宝退款结果失败, outRequestNo={}", outRequestNo, e);
+            return AlipayRefundResult.pending("QUERY_UNKNOWN", "支付宝退款结果待确认");
+        }
+    }
+
+    private static Integer toFen(String yuan) {
+        if (yuan == null || yuan.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(yuan).movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
+        } catch (ArithmeticException | NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private void ensureConfigured() {

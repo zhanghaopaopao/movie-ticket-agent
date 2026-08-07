@@ -4,6 +4,7 @@ import com.szml.movieticket.context.UserContext;
 import com.szml.movieticket.dto.LockSeatsDTO;
 import com.szml.movieticket.dto.PayDTO;
 import com.szml.movieticket.result.Result;
+import com.szml.movieticket.service.OrderRefundService;
 import com.szml.movieticket.service.OrderTicketService;
 import com.szml.movieticket.vo.*;
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
 
     private final OrderTicketService orderTicketService;
+    private final OrderRefundService orderRefundService;
 
     /**
      * 锁座。
@@ -73,16 +75,21 @@ public class OrderController {
      * 退票（已出票订单退款，座位释放）。
      */
     @PostMapping("/{id}/refund")
-    public Result<Void> refund(@PathVariable Long id) {
+    public Result<RefundResultVO> refund(@PathVariable Long id) {
         Long userId = UserContext.getUserId();
         log.info("退票, 用户ID: {}, 订单ID: {}", userId, id);
-        orderTicketService.refundOrder(userId, id);
-        return Result.success();
+        return Result.success(orderRefundService.requestRefund(userId, id));
     }
 
     /**
      * 订单列表。
      */
+    @GetMapping("/{id}/refund")
+    public Result<RefundResultVO> refundStatus(@PathVariable Long id) {
+        Long userId = UserContext.getUserId();
+        return Result.success(orderRefundService.getRefundStatus(userId, id));
+    }
+
     @GetMapping
     public Result<UserOrderPageVO> list(@RequestParam(defaultValue = "1") int page,
                                          @RequestParam(defaultValue = "10") int size,

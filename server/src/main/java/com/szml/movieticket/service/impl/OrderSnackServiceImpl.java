@@ -186,7 +186,6 @@ public class OrderSnackServiceImpl implements OrderSnackService {
     public int getSnackAmountFen(Long orderId) {
         return orderSnackItemMapper.selectList(new LambdaQueryWrapper<OrderSnackItem>()
                         .eq(OrderSnackItem::getOrderId, orderId)
-                        .in(OrderSnackItem::getInventoryStatus, RESERVED, SOLD)
                         .gt(OrderSnackItem::getQuantity, 0))
                 .stream()
                 .mapToInt(item -> safeQuantity(item.getQuantity()) * safeQuantity(item.getUnitPriceFen()))
@@ -232,6 +231,38 @@ public class OrderSnackServiceImpl implements OrderSnackService {
                 product.setStock(safeQuantity(product.getStock()) + safeQuantity(item.getQuantity()));
                 snackProductMapper.updateById(product);
             }
+            item.setInventoryStatus(RELEASED);
+            orderSnackItemMapper.updateById(item);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void refundSold(Long orderId) {
+        List<OrderSnackItem> items = orderSnackItemMapper.selectByOrderForUpdate(orderId);
+        List<OrderSnackItem> soldItems = items.stream()
+                .filter(item -> SOLD.equals(item.getInventoryStatus()) && safeQuantity(item.getQuantity()) > 0)
+                .toList();
+        List<Long> productIds = soldItems.stream()
+                .map(OrderSnackItem::getSnackId)
+                .distinct()
+                .sorted()
+                .toList();
+        Map<Long, SnackProduct> products = new LinkedHashMap<>();
+        for (Long productId : productIds) {
+            SnackProduct product = snackProductMapper.selectForUpdate(productId);
+            if (product == null) {
+                throw new OrderException(ErrorCode.SNACK_NOT_FOUND);
+            }
+            products.put(productId, product);
+        }
+        for (OrderSnackItem item : soldItems) {
+            SnackProduct product = products.get(item.getSnackId());
+            int quantity = safeQuantity(item.getQuantity());
+            product.setStock(safeQuantity(product.getStock()) + quantity);
+            product.setSoldCount(Math.max(0, safeQuantity(product.getSoldCount()) - quantity));
+            snackProductMapper.updateById(product);
+
             item.setInventoryStatus(RELEASED);
             orderSnackItemMapper.updateById(item);
         }

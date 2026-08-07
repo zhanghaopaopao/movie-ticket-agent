@@ -20,6 +20,7 @@ public class OrderStatusUtil {
             case "TICKETED" -> "已出票";
             case "CANCELLED" -> "已取消";
             case "EXPIRED" -> "已过期";
+            case "REFUND_PENDING" -> "退款处理中";
             case "REFUNDED" -> "已退票";
             default -> status;
         };

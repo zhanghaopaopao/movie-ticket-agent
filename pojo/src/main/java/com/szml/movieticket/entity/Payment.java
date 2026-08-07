@@ -38,7 +38,7 @@ public class Payment {
     /** 幂等键 */
     private String idempotencyKey;
 
-    /** 支付状态：PENDING / SUCCESS / FAIL / CLOSED */
+    /** 支付状态：PENDING / SUCCESS / FAIL / CLOSED / REFUNDED */
     private String status;
 
     /** 支付金额（分） */

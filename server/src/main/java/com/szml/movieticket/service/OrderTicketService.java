@@ -48,7 +48,6 @@ public interface OrderTicketService {
      * @param userId  用户ID
      * @param orderId 订单ID
      */
-    void refundOrder(Long userId, Long orderId);
 
     /**
      * C 端订单列表。

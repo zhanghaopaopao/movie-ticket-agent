@@ -19,4 +19,7 @@ public interface OrderSnackService {
     void markSold(Long orderId);
 
     void releaseReserved(Long orderId);
+
+    /** 退票时恢复已售零食库存并回滚销量。 */
+    void refundSold(Long orderId);
 }

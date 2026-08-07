@@ -32,7 +32,7 @@ public class Ticket {
     /** 二维码内容 JSON */
     private String qrContent;
 
-    /** 状态：0=有效 1=已用 2=已退 */
+    /** 状态：0=有效，1=已使用，2=已退票，3=退款处理中。 */
     private Integer status;
 
     private LocalDateTime createTime;

@@ -1,5 +1,7 @@
 package com.szml.movieticket.service;
 
+import com.szml.movieticket.service.model.AlipayRefundResult;
+
 import java.util.Map;
 
 /**
@@ -18,4 +20,10 @@ public interface AlipayPaymentService {
 
     /** Verifies the signature and application identity of an Alipay notification. */
     boolean verifyNotification(Map<String, String> params);
+
+    /** 发起支付宝整单退款。 */
+    AlipayRefundResult refund(String outTradeNo, String tradeNo, String outRequestNo, Integer amountFen);
+
+    /** 查询支付宝退款结果。 */
+    AlipayRefundResult queryRefund(String outTradeNo, String tradeNo, String outRequestNo, Integer amountFen);
 }
