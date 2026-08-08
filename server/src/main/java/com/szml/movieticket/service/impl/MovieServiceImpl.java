@@ -318,6 +318,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
                 summary.setCinemaName(cinemaNameMap.get(hall.getCinemaId()));
             }
             summary.setStartAt(st.getStartAt());
+            summary.setEndAt(st.getEndAt());
             summary.setPrice(st.getBasePrice() != null
                     ? String.format("%.2f", AmountUtil.yuan(st.getBasePrice()))
                     : null);

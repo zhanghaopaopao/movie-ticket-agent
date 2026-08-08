@@ -25,6 +25,9 @@ public class ShowtimeSummaryVO {
     /** 开映时间 */
     private LocalDateTime startAt;
 
+    /** 结束时间 */
+    private LocalDateTime endAt;
+
     /** 票价（元） */
     private String price;
 
