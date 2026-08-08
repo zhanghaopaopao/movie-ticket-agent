@@ -100,6 +100,7 @@ public enum ErrorCode {
     PAYMENT_NOT_CONFIGURED(6005, "支付宝沙箱支付尚未配置"),
     PAYMENT_PROVIDER_ERROR(6006, "支付宝支付服务暂时不可用"),
     ORDER_REFUND_TOO_LATE(6007, "距离开场不足30分钟，不可退票"),
+    COUPLE_SEAT_MUST_PAIR(6008, "情侣座必须成对选择"),
 
     // ---- 草稿（7000-7999）----
 
