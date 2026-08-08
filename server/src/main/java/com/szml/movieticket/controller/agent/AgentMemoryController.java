@@ -1,4 +1,4 @@
-package com.szml.movieticket.controller.user;
+package com.szml.movieticket.controller.agent;
 
 import com.szml.movieticket.context.UserContext;
 import com.szml.movieticket.dto.AgentMemorySyncDTO;

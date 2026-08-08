@@ -144,6 +144,42 @@ public class OrderTicketServiceImpl implements OrderTicketService {
             seat.setVersion(seat.getVersion() + 1);
         }
 
+        // 情侣座成对校验
+        List<Long> lockedSeatPhysicalIds = locked.stream().map(ShowtimeSeat::getSeatId).toList();
+        Map<Long, Seat> physicalSeatMap = new HashMap<>();
+        if (!lockedSeatPhysicalIds.isEmpty()) {
+            for (Seat s : seatMapper.selectBatchIds(lockedSeatPhysicalIds)) {
+                physicalSeatMap.put(s.getId(), s);
+            }
+        }
+        Set<Long> lockedInventoryIds = new HashSet<>(seatIds);
+        for (ShowtimeSeat sts : locked) {
+            Seat physicalSeat = physicalSeatMap.get(sts.getSeatId());
+            if (physicalSeat == null || !"COUPLE".equalsIgnoreCase(physicalSeat.getZone())) {
+                continue;
+            }
+            // 搭档座号：1←→2，3←→4
+            int partnerSeatNo = (physicalSeat.getSeatNo() % 2 == 1)
+                    ? physicalSeat.getSeatNo() + 1
+                    : physicalSeat.getSeatNo() - 1;
+            Seat partnerSeat = seatMapper.selectOne(new LambdaQueryWrapper<Seat>()
+                    .eq(Seat::getHallId, physicalSeat.getHallId())
+                    .eq(Seat::getRowNo, physicalSeat.getRowNo())
+                    .eq(Seat::getSeatNo, partnerSeatNo));
+            if (partnerSeat == null) {
+                redisKeys.forEach(k -> stringRedisTemplate.delete(k));
+                throw new OrderException(ErrorCode.COUPLE_SEAT_MUST_PAIR);
+            }
+            ShowtimeSeat partnerInventory = showtimeSeatMapper.selectOne(
+                    new LambdaQueryWrapper<ShowtimeSeat>()
+                            .eq(ShowtimeSeat::getShowtimeId, showtimeId)
+                            .eq(ShowtimeSeat::getSeatId, partnerSeat.getId()));
+            if (partnerInventory == null || !lockedInventoryIds.contains(partnerInventory.getId())) {
+                redisKeys.forEach(k -> stringRedisTemplate.delete(k));
+                throw new OrderException(ErrorCode.COUPLE_SEAT_MUST_PAIR);
+            }
+        }
+
         // 锁定座位
         LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(LOCK_SECONDS);
         for (ShowtimeSeat seat : locked) {

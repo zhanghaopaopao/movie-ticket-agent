@@ -18,6 +18,11 @@ public class AgentMessageVO {
 
     private String content;
 
+    /**
+     * Agent 卡片数据，使用 JSON 数组保存，供历史会话恢复展示。
+     */
+    private String cardsJson;
+
     private String event;
 
     private String intent;
