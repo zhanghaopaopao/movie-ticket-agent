@@ -24,8 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -71,8 +74,34 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
                         .orderByDesc(AgentSession::getUpdateTime)
                         .orderByDesc(AgentSession::getCreateTime)
                         .last("LIMIT " + safeLimit));
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        List<String> sessionIds = sessions.stream()
+                .map(AgentSession::getId)
+                .toList();
+        List<AgentMessage> messages = messageMapper.selectList(
+                new LambdaQueryWrapper<AgentMessage>()
+                        .select(
+                                AgentMessage::getSessionId,
+                                AgentMessage::getRole,
+                                AgentMessage::getContent,
+                                AgentMessage::getCreateTime,
+                                AgentMessage::getId)
+                        .in(AgentMessage::getSessionId, sessionIds)
+                        .orderByAsc(AgentMessage::getSessionId)
+                        .orderByAsc(AgentMessage::getCreateTime)
+                        .orderByAsc(AgentMessage::getId));
+        Map<String, List<AgentMessage>> messagesBySession = new HashMap<>();
+        for (AgentMessage message : messages) {
+            messagesBySession
+                    .computeIfAbsent(message.getSessionId(), ignored -> new ArrayList<>())
+                    .add(message);
+        }
         return sessions.stream()
-                .map(this::toSummaryVO)
+                .map(session -> toSummaryVO(
+                        session,
+                        messagesBySession.getOrDefault(session.getId(), List.of())))
                 .toList();
     }
 
@@ -313,20 +342,16 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
         return vo;
     }
 
-    private AgentSessionSummaryVO toSummaryVO(AgentSession session) {
-        AgentMessage firstUserMessage = findOneMessage(
-                session.getId(),
-                "USER",
-                true);
-        AgentMessage latestMessage = findOneMessage(
-                session.getId(),
-                null,
-                false);
-        Long messageCount = messageMapper.selectCount(
-                new LambdaQueryWrapper<AgentMessage>()
-                        .eq(
-                                AgentMessage::getSessionId,
-                                session.getId()));
+    private AgentSessionSummaryVO toSummaryVO(
+            AgentSession session,
+            List<AgentMessage> messages) {
+        AgentMessage firstUserMessage = messages.stream()
+                .filter(message -> "USER".equalsIgnoreCase(message.getRole()))
+                .findFirst()
+                .orElse(null);
+        AgentMessage latestMessage = messages.isEmpty()
+                ? null
+                : messages.get(messages.size() - 1);
 
         AgentSessionSummaryVO vo = new AgentSessionSummaryVO();
         vo.setMemoryId(session.getId());
@@ -335,9 +360,7 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
         vo.setPreviewMessage(latestMessage == null
                 ? ""
                 : limitText(latestMessage.getContent(), 80));
-        vo.setMessageCount(messageCount == null
-                ? 0
-                : Math.toIntExact(messageCount));
+        vo.setMessageCount(messages.size());
         vo.setLastMessageTime(session.getUpdateTime());
         vo.setCreateTime(session.getCreateTime());
         vo.setUpdateTime(session.getUpdateTime());
@@ -410,6 +433,7 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
         vo.setMemoryId(session.getId());
         vo.setRole(toClientRole(message.getRole()));
         vo.setContent(message.getContent());
+        vo.setCardsJson(message.getCardsJson());
         vo.setCreateTime(message.getCreateTime());
         return vo;
     }
