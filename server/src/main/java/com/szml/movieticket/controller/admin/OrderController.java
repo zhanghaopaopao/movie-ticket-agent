@@ -2,8 +2,10 @@ package com.szml.movieticket.controller.admin;
 
 import com.szml.movieticket.result.Result;
 import com.szml.movieticket.service.OrderService;
+import com.szml.movieticket.service.OrderRefundService;
 import com.szml.movieticket.vo.OrderDetailVO;
 import com.szml.movieticket.vo.OrderPageVO;
+import com.szml.movieticket.vo.RefundResultVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderRefundService orderRefundService;
 
     /**
      * 分页查询订单列表。
@@ -49,5 +52,14 @@ public class OrderController {
         log.info("查询订单详情, 订单ID: {}", id);
         OrderDetailVO orderDetailVO = orderService.getOrderDetail(id);
         return Result.success(orderDetailVO);
+    }
+
+    /**
+     * 使用原退款幂等号重试一笔待确认的支付宝退款。
+     */
+    @PostMapping("/{id}/refund/retry")
+    public Result<RefundResultVO> retryRefund(@PathVariable Long id) {
+        log.info("管理员重试退款, 订单ID: {}", id);
+        return Result.success(orderRefundService.retryPendingRefund(id));
     }
 }
