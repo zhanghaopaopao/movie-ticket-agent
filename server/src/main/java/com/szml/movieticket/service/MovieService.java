@@ -9,6 +9,7 @@ import com.szml.movieticket.vo.MovieOptionVO;
 import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -68,7 +69,8 @@ public interface MovieService extends IService<Movie> {
 
     /**
      * Agent 影片查询（仅返回有在售场次的影片，无场次的不返回）。
+     * @param date 可选日期过滤（today/tomorrow/ISO date），为 null 表示不限
      */
     MoviePageVO listMoviesWithShowtimes(Long userId, int page, int size, String genre, String keyword,
-                                        String sortBy, String sortOrder);
+                                        String sortBy, String sortOrder, LocalDate date);
 }

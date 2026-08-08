@@ -7,7 +7,10 @@ import com.szml.movieticket.vo.MoviePageVO;
 import com.szml.movieticket.vo.MovieVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 /**
  * Agent 影片查询接口。
@@ -38,15 +41,34 @@ public class AgentMovieController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String genre,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String date,
             @RequestParam(defaultValue = "createTime") String sortBy,
             @RequestParam(defaultValue = "desc") String sortOrder) {
 
         Long userId = UserContext.getUserId();
-        log.info("Agent查询影片, userId: {}, genre: {}, keyword: {}, page: {}, size: {}",
-                userId, genre, keyword, page, size);
+        log.info("Agent查询影片, userId: {}, genre: {}, keyword: {}, date: {}, page: {}, size: {}",
+                userId, genre, keyword, date, page, size);
+
+        LocalDate dateFilter = null;
+        if (StringUtils.hasText(date)) {
+            String text = date.trim();
+            if ("today".equalsIgnoreCase(text) || "今天".equals(text) || "今晚".equals(text)) {
+                dateFilter = LocalDate.now();
+            } else if ("tomorrow".equalsIgnoreCase(text) || "明天".equals(text) || "明晚".equals(text)) {
+                dateFilter = LocalDate.now().plusDays(1);
+            } else if ("after_tomorrow".equalsIgnoreCase(text) || "后天".equals(text)) {
+                dateFilter = LocalDate.now().plusDays(2);
+            } else {
+                try {
+                    dateFilter = LocalDate.parse(text);
+                } catch (Exception ignored) {
+                    // invalid date, ignore filter
+                }
+            }
+        }
 
         MoviePageVO result = movieService.listMoviesWithShowtimes(
-                userId, page, size, genre, keyword, sortBy, sortOrder);
+                userId, page, size, genre, keyword, sortBy, sortOrder, dateFilter);
         return Result.success(result);
     }
 

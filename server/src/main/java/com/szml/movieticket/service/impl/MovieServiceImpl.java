@@ -260,7 +260,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
 
     @Override
     public MoviePageVO listMoviesWithShowtimes(Long userId, int page, int size, String genre, String keyword,
-                                               String sortBy, String sortOrder) {
+                                               String sortBy, String sortOrder, LocalDate date) {
         int fetchSize = Math.max(size * 2, 50);
         LambdaQueryWrapper<Movie> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(genre)) {
@@ -279,14 +279,24 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             return empty;
         }
 
-        // 只查询未来有在售场次
+        // 只查询未来有在售场次，按日期过滤
         List<Long> movieIds = movies.stream().map(Movie::getId).toList();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime fromTime = date != null
+                ? date.atStartOfDay()
+                : now;
+        LocalDateTime toTime = date != null
+                ? date.plusDays(1).atStartOfDay()
+                : null;
+        LambdaQueryWrapper<Showtime> showtimeWrapper = new LambdaQueryWrapper<Showtime>()
+                .in(Showtime::getMovieId, movieIds)
+                .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
+                .gt(Showtime::getStartAt, fromTime);
+        if (toTime != null) {
+            showtimeWrapper.lt(Showtime::getStartAt, toTime);
+        }
         List<Showtime> futureShowtimes = showtimeMapper.selectList(
-                new LambdaQueryWrapper<Showtime>()
-                        .in(Showtime::getMovieId, movieIds)
-                        .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE)
-                        .gt(Showtime::getStartAt, LocalDateTime.now())
-                        .orderByAsc(Showtime::getStartAt));
+                showtimeWrapper.orderByAsc(Showtime::getStartAt));
 
         // 一次性查影厅和影院，避免 N+1
         Set<Long> hallIds = futureShowtimes.stream().map(Showtime::getHallId).collect(Collectors.toSet());
