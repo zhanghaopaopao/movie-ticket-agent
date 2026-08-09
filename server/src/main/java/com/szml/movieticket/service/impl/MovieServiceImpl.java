@@ -382,6 +382,10 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             throw new MovieException(ErrorCode.MOVIE_NOT_FOUND);
         }
         MovieVO vo = toVO(movie);
+        if (userId == null) {
+            vo.setWanted(false);
+            return vo;
+        }
         vo.setWanted(wishlistMapper.selectCount(new LambdaQueryWrapper<UserMovieWishlist>()
                 .eq(UserMovieWishlist::getUserId, userId)
                 .eq(UserMovieWishlist::getMovieId, id)) > 0);
@@ -390,6 +394,10 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
 
     private void markWanted(Long userId, List<MovieVO> movies) {
         if (movies.isEmpty()) return;
+        if (userId == null) {
+            movies.forEach(movie -> movie.setWanted(false));
+            return;
+        }
         List<Long> movieIds = movies.stream().map(MovieVO::getId).toList();
         Set<Long> wantedMovieIds = wishlistMapper.selectList(
                 new LambdaQueryWrapper<UserMovieWishlist>()
