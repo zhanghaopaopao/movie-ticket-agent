@@ -41,6 +41,9 @@ public class AuthInterceptor implements HandlerInterceptor {
                              Object handler) throws Exception {
         String token = extractToken(request);
         if (!StringUtils.hasText(token)) {
+            if (isPublicReadRequest(request)) {
+                return true;
+            }
             writeError(response, ErrorCode.UNAUTHORIZED);
             return false;
         }
@@ -78,6 +81,19 @@ public class AuthInterceptor implements HandlerInterceptor {
             return header.substring(BEARER_PREFIX.length());
         }
         return null;
+    }
+
+    private boolean isPublicReadRequest(HttpServletRequest request) {
+        if (!"GET".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return path.matches("/api/user/movies/?")
+                || path.matches("/api/user/movies/\\d+/?")
+                || path.matches("/api/user/movies/\\d+/reviews/?")
+                || path.matches("/api/user/cinemas(?:/nearby)?/?")
+                || path.matches("/api/user/showtimes/?");
     }
 
     private void writeError(HttpServletResponse response, ErrorCode errorCode) throws Exception {
