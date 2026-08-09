@@ -55,6 +55,15 @@ public class OrderRefundServiceImpl implements OrderRefundService {
     }
 
     @Override
+    public RefundResultVO retryPendingRefund(Long orderId) {
+        PaymentRefund refund = refundTransactionService.getPendingRefund(orderId);
+        log.info("管理员重试支付宝退款, orderId={}, refundId={}", orderId, refund.getId());
+        AlipayRefundResult providerResult = alipayPaymentService.refund(
+                refund.getOutTradeNo(), refund.getTradeNo(), refund.getOutRequestNo(), refund.getRefundAmountFen());
+        return applyProviderResult(refund, providerResult, null, orderId);
+    }
+
+    @Override
     public void reconcilePendingRefunds() {
         for (PaymentRefund refund : refundTransactionService.listPending()) {
             try {

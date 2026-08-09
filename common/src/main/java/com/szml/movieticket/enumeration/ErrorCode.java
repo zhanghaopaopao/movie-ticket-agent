@@ -121,6 +121,10 @@ public enum ErrorCode {
     USER_CURRENT_EMAIL_CODE_INVALID(9003, "当前邮箱验证码错误或已过期"),
     USER_NEW_EMAIL_CODE_INVALID(9004, "新邮箱验证码错误或已过期"),
 
+    // ---- 影评（10000-10099）----
+    REVIEW_NOT_FOUND(10000, "影评不存在或已删除"),
+    REVIEW_DELETE_FORBIDDEN(10001, "只能删除自己发布的影评"),
+
     // ---- 零食：7100-7199 ----
     SNACK_NOT_FOUND(7100, "零食商品不存在"),
     SNACK_STOCK_NOT_ENOUGH(7101, "零食库存不足"),
