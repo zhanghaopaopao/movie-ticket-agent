@@ -43,6 +43,8 @@ public class ShowtimeGroupedVO {
     @Data
     public static class ShowtimeItem {
         private Long id;
+        private Long cinemaId;
+        private String cinemaName;
         private LocalDateTime startAt;
         private LocalDateTime endAt;
         private String language;

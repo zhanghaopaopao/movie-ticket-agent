@@ -476,6 +476,26 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         wrapper.orderByAsc(Showtime::getStartAt);
 
         List<Showtime> showtimes = list(wrapper);
+        Map<Long, Hall> showtimeHallMap = new HashMap<>();
+        Map<Long, Cinema> showtimeCinemaMap = new HashMap<>();
+        if (!showtimes.isEmpty()) {
+            Set<Long> showtimeHallIds = showtimes.stream()
+                    .map(Showtime::getHallId)
+                    .collect(Collectors.toSet());
+            if (!showtimeHallIds.isEmpty()) {
+                hallMapper.selectBatchIds(showtimeHallIds)
+                        .forEach(hall -> showtimeHallMap.put(hall.getId(), hall));
+            }
+
+            Set<Long> showtimeCinemaIds = showtimeHallMap.values().stream()
+                    .map(Hall::getCinemaId)
+                    .filter(id -> id != null)
+                    .collect(Collectors.toSet());
+            if (!showtimeCinemaIds.isEmpty()) {
+                cinemaMapper.selectBatchIds(showtimeCinemaIds)
+                        .forEach(item -> showtimeCinemaMap.put(item.getId(), item));
+            }
+        }
 
         // 按影片ID分组
         Map<Long, List<Showtime>> groupedByMovie = new LinkedHashMap<>();
@@ -514,10 +534,15 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
                 item.setLanguage(showtime.getLanguage());
                 item.setBasePrice(showtime.getBasePrice());
 
-                Hall hall = hallMapper.selectById(showtime.getHallId());
+                Hall hall = showtimeHallMap.get(showtime.getHallId());
                 if (hall != null) {
                     item.setHallName(hall.getName());
                     item.setHallType(hall.getHallType() != null ? hall.getHallType().getCode() : null);
+                    item.setCinemaId(hall.getCinemaId());
+                    Cinema itemCinema = showtimeCinemaMap.get(hall.getCinemaId());
+                    if (itemCinema != null) {
+                        item.setCinemaName(itemCinema.getName());
+                    }
                 }
 
                 // 统计剩余座位
