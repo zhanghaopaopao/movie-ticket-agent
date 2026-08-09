@@ -300,6 +300,15 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
     }
 
     @Override
+    public PaymentRefund getPendingRefund(Long orderId) {
+        PaymentRefund refund = findLatestRefund(orderId);
+        if (refund == null || !PaymentRefund.PENDING.equals(refund.getStatus())) {
+            throw new OrderException(ErrorCode.ORDER_STATUS_INVALID);
+        }
+        return refund;
+    }
+
+    @Override
     public List<PaymentRefund> listPending() {
         return paymentRefundMapper.selectList(new LambdaQueryWrapper<PaymentRefund>()
                 .eq(PaymentRefund::getStatus, PaymentRefund.PENDING)
@@ -362,7 +371,7 @@ public class OrderRefundTransactionServiceImpl implements OrderRefundTransaction
         if (PaymentRefund.SUCCESS.equals(refund.getStatus())) {
             result.setMessage("退款成功，电子票已失效");
         } else if (PaymentRefund.PENDING.equals(refund.getStatus())) {
-            result.setMessage("退款处理中，请稍后刷新");
+            result.setMessage("退款处理中，请稍后刷新；如果长时间退款不成功，请联系商家");
         } else {
             result.setMessage("退款失败，可重新申请退票");
         }

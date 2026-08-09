@@ -24,6 +24,9 @@ public interface OrderRefundTransactionService {
     /** 查询当前用户订单的退款结果。 */
     RefundResultVO getStatus(Long userId, Long orderId);
 
+    /** 获取订单最新一笔待确认退款，用于管理员安全重试。 */
+    PaymentRefund getPendingRefund(Long orderId);
+
     /** 获取待自动对账的退款记录。 */
     List<PaymentRefund> listPending();
 }
