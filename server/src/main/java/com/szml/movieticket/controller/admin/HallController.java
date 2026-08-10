@@ -13,6 +13,7 @@ import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
 import com.szml.movieticket.vo.SeatVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -84,6 +85,17 @@ public class HallController {
     }
 
     /**
+     * 批量新增影厅物理座位。
+     */
+    @PostMapping("/api/admin/halls/{hallId}/seats/batch")
+    public Result<Void> createSeatsBatch(@PathVariable Long hallId,
+                                         @Valid @RequestBody List<SeatCreateDTO> dtos) {
+        log.info("批量新增物理座位, hallId: {}, count: {}", hallId, dtos.size());
+        hallService.batchCreateSeats(hallId, dtos);
+        return Result.success();
+    }
+
+    /**
      * 新增影厅物理座位。
      */
     @PostMapping("/api/admin/halls/{hallId}/seats")
@@ -107,13 +119,21 @@ public class HallController {
     /**
      * 删除影厅物理座位。
      */
-    @DeleteMapping("/api/admin/halls/{hallId}/seats/{seatId}")
-    public Result<Void> deleteSeat(@PathVariable Long hallId,
-                                   @PathVariable Long seatId) {
-        log.info("删除物理座位, hallId: {}, seatId: {}", hallId, seatId);
-        hallService.deleteSeat(hallId, seatId);
+    @DeleteMapping("/api/admin/halls/{hallId}/seats/batch")
+    public Result<Void> deleteSeatsBatch(@PathVariable Long hallId,
+                                         @RequestBody List<Long> seatIds) {
+        log.info("批量删除物理座位, hallId: {}, count: {}", hallId, seatIds.size());
+        hallService.batchDeleteSeats(hallId, seatIds);
         return Result.success();
     }
+
+//    @DeleteMapping("/api/admin/halls/{hallId}/seats/{seatId}")
+//    public Result<Void> deleteSeat(@PathVariable Long hallId,
+//                                   @PathVariable Long seatId) {
+//        log.info("删除物理座位, hallId: {}, seatId: {}", hallId, seatId);
+//        hallService.deleteSeat(hallId, seatId);
+//        return Result.success();
+//    }
 
     /**
      * 批量保存影厅物理座位布局。

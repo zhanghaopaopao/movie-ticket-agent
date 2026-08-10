@@ -131,7 +131,8 @@ public enum ErrorCode {
     SNACK_SELECTION_INVALID(7102, "零食选择不合法"),
     SNACK_PAYMENT_LOCKED(7103, "订单已进入支付流程，暂不能修改零食"),
     SNACK_NAME_DUPLICATE(7104, "同一影院下零食名称已存在"),
-    SNACK_STATUS_INVALID(7105, "零食上下架状态不合法");
+    SNACK_STATUS_INVALID(7105, "零食上下架状态不合法"),
+    SNACK_HAS_RESERVED_ORDER(7106, "该零食存在未支付订单，不可删除");
 
     private final int code;
     private final String message;

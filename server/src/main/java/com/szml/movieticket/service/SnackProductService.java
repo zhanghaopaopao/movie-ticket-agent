@@ -22,4 +22,6 @@ public interface SnackProductService extends IService<SnackProduct> {
     void updateStatus(Long id, SnackProductStatusDTO dto);
 
     void updateStock(Long id, SnackProductStockDTO dto);
+
+    void deleteProduct(Long id);
 }

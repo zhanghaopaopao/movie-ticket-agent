@@ -222,6 +222,14 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
     @Override
     @Transactional
+    public void batchCreateSeats(Long hallId, List<SeatCreateDTO> dtos) {
+        for (SeatCreateDTO dto : dtos) {
+            createSeat(hallId, dto);
+        }
+    }
+
+    @Override
+    @Transactional
     public SeatVO updateSeat(Long hallId, Long seatId, SeatUpdateDTO dto) {
         requireHall(hallId);
         Seat seat = getSeat(hallId, seatId);
@@ -257,6 +265,28 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
     @Override
     @Transactional
+    public void batchDeleteSeats(Long hallId, List<Long> seatIds) {
+        if (seatIds == null || seatIds.isEmpty()) return;
+
+        // 逐个校验能否删除
+        for (Long seatId : seatIds) {
+            Seat seat = getSeat(hallId, seatId);
+            assertSeatCanChange(seat.getId());
+        }
+
+        // 删库存
+        showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
+                .in(ShowtimeSeat::getSeatId, seatIds));
+
+        // 删物理座位
+        seatMapper.delete(new LambdaQueryWrapper<Seat>()
+                .eq(Seat::getHallId, hallId)
+                .in(Seat::getId, seatIds));
+
+        log.info("批量删除物理座位, hallId: {}, count: {}", hallId, seatIds.size());
+    }
+
+    @Override
     public void deleteSeat(Long hallId, Long seatId) {
         requireHall(hallId);
         Seat seat = getSeat(hallId, seatId);
@@ -512,7 +542,8 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
     private void syncNewSeatToShowtimes(Seat seat) {
         List<Showtime> showtimes = showtimeMapper.selectList(new LambdaQueryWrapper<Showtime>()
-                .eq(Showtime::getHallId, seat.getHallId()));// 查该影厅所有场次
+                .eq(Showtime::getHallId, seat.getHallId())
+                .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
         if (showtimes.isEmpty()) {
             return;
         }
@@ -537,7 +568,9 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         }
         Long hallId = seats.getFirst().getHallId();
         List<Showtime> showtimes = showtimeMapper.selectList(
-                new LambdaQueryWrapper<Showtime>().eq(Showtime::getHallId, hallId));
+                new LambdaQueryWrapper<Showtime>()
+                        .eq(Showtime::getHallId, hallId)
+                        .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
         if (showtimes.isEmpty()) {
             return;
         }
@@ -561,9 +594,10 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     }
 
     private void syncSeatToShowtimes(Seat seat) {
-        // 1. 查该影厅所有场次
+        // 1. 查该影厅所有未结束场次
         List<Showtime> showtimes = showtimeMapper.selectList(new LambdaQueryWrapper<Showtime>()
-                .eq(Showtime::getHallId, seat.getHallId()));
+                .eq(Showtime::getHallId, seat.getHallId())
+                .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
         if (showtimes.isEmpty()) {
             return;
         }

@@ -56,4 +56,10 @@ public class SnackProductController {
         snackProductService.updateStock(id, dto);
         return Result.success();
     }
+
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteProduct(@PathVariable Long id) {
+        snackProductService.deleteProduct(id);
+        return Result.success();
+    }
 }

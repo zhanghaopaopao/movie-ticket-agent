@@ -2,6 +2,7 @@ package com.szml.movieticket.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -33,6 +34,10 @@ public class SnackProduct {
 
     /** 1 表示上架，0 表示下架。 */
     private Integer status;
+
+    /** 逻辑删除：0=正常 1=已删除 */
+    @TableLogic(value = "0", delval = "1")
+    private Integer deleted;
 
     private LocalDateTime createTime;
 

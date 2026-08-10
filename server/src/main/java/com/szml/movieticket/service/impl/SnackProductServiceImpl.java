@@ -8,10 +8,12 @@ import com.szml.movieticket.dto.SnackProductStatusDTO;
 import com.szml.movieticket.dto.SnackProductStockDTO;
 import com.szml.movieticket.dto.SnackProductUpdateDTO;
 import com.szml.movieticket.entity.Cinema;
+import com.szml.movieticket.entity.OrderSnackItem;
 import com.szml.movieticket.entity.SnackProduct;
 import com.szml.movieticket.enumeration.ErrorCode;
 import com.szml.movieticket.exception.OrderException;
 import com.szml.movieticket.mapper.CinemaMapper;
+import com.szml.movieticket.mapper.OrderSnackItemMapper;
 import com.szml.movieticket.mapper.SnackProductMapper;
 import com.szml.movieticket.service.SnackProductService;
 import com.szml.movieticket.vo.SnackProductPageVO;
@@ -31,6 +33,7 @@ public class SnackProductServiceImpl extends ServiceImpl<SnackProductMapper, Sna
         implements SnackProductService {
 
     private final CinemaMapper cinemaMapper;
+    private final OrderSnackItemMapper orderSnackItemMapper;
 
     @Override
     public SnackProductPageVO pageProducts(int page, int size, Long cinemaId, String keyword, Integer status) {
@@ -115,6 +118,19 @@ public class SnackProductServiceImpl extends ServiceImpl<SnackProductMapper, Sna
         }
         product.setStock(dto.getStock());
         updateById(product);
+    }
+
+    @Override
+    public void deleteProduct(Long id) {
+        SnackProduct product = requireProduct(id);
+        // 有 RESERVED 状态的未支付订单 → 禁止删除
+        long reservedCount = orderSnackItemMapper.selectCount(new LambdaQueryWrapper<OrderSnackItem>()
+                .eq(OrderSnackItem::getSnackId, id)
+                .eq(OrderSnackItem::getInventoryStatus, "RESERVED"));
+        if (reservedCount > 0) {
+            throw new OrderException(ErrorCode.SNACK_HAS_RESERVED_ORDER);
+        }
+        removeById(id);
     }
 
     private SnackProduct requireProduct(Long id) {
