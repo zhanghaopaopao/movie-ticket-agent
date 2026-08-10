@@ -55,8 +55,8 @@ public interface HallService extends IService<Hall> {
     /** 编辑影厅物理座位。 */
     SeatVO updateSeat(Long hallId, Long seatId, SeatUpdateDTO dto);
 
-    /** 删除影厅物理座位。 */
-    void deleteSeat(Long hallId, Long seatId);
+//    /** 删除影厅物理座位。 */
+//    void deleteSeat(Long hallId, Long seatId);
 
     /** 批量删除影厅物理座位。 */
     void batchDeleteSeats(Long hallId, java.util.List<Long> seatIds);

@@ -23,6 +23,7 @@ import com.szml.movieticket.mapper.SeatMapper;
 import com.szml.movieticket.mapper.ShowtimeMapper;
 import com.szml.movieticket.mapper.ShowtimeSeatMapper;
 import com.szml.movieticket.service.HallService;
+import com.szml.movieticket.service.SeatService;
 import com.szml.movieticket.vo.HallPageVO;
 import com.szml.movieticket.vo.HallSeatVO;
 import com.szml.movieticket.vo.HallVO;
@@ -55,6 +56,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     private final ShowtimeMapper showtimeMapper;
     private final ShowtimeSeatMapper showtimeSeatMapper;
     private final OrderItemMapper orderItemMapper;
+    private final SeatService seatService;
 
     @Override
     public HallPageVO pageHallsByCinemaId(int page, int size, Long cinemaId, String keyword) {
@@ -223,9 +225,45 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     @Override
     @Transactional
     public void batchCreateSeats(Long hallId, List<SeatCreateDTO> dtos) {
+        requireHall(hallId);
+        if (dtos.isEmpty()) return;
+
+        // 1. 批量校验：一次查出所有已有位置，内存判重
+        Set<String> existingPositions = seatMapper.selectList(
+                new LambdaQueryWrapper<Seat>()
+                        .eq(Seat::getHallId, hallId)
+                        .select(Seat::getRowNo, Seat::getSeatNo))
+                .stream()
+                .map(s -> positionKey(s.getRowNo(), s.getSeatNo()))
+                .collect(Collectors.toSet());
+
+        List<Seat> seats = new ArrayList<>();
+        Set<String> batchPositions = new HashSet<>();
         for (SeatCreateDTO dto : dtos) {
-            createSeat(hallId, dto);
+            Integer status = dto.getStatus() == null ? 0 : dto.getStatus();
+            validateSeatValues(dto.getRowNo(), dto.getSeatNo(), dto.getZone(), dto.getSeatType(), status);
+
+            String pos = positionKey(dto.getRowNo(), dto.getSeatNo());
+            if (existingPositions.contains(pos) || !batchPositions.add(pos)) {
+                throw new SeatException(ErrorCode.SEAT_POSITION_DUPLICATE);
+            }
+
+            Seat seat = new Seat();
+            seat.setHallId(hallId);
+            seat.setRowNo(dto.getRowNo());
+            seat.setSeatNo(dto.getSeatNo());
+            seat.setZone(normalizeZone(dto.getZone()));
+            seat.setSeatType(dto.getSeatType());
+            seat.setStatus(status);
+            seats.add(seat);
         }
+
+        // 2. 批量插入
+        seatService.saveBatch(seats);
+
+        // 3. 批量同步到未结束场次的库存
+        syncNewSeatsToShowtimes(seats);
+        log.info("批量新增物理座位完成, hallId: {}, count: {}", hallId, seats.size());
     }
 
     @Override
@@ -268,11 +306,8 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
     public void batchDeleteSeats(Long hallId, List<Long> seatIds) {
         if (seatIds == null || seatIds.isEmpty()) return;
 
-        // 逐个校验能否删除
-        for (Long seatId : seatIds) {
-            Seat seat = getSeat(hallId, seatId);
-            assertSeatCanChange(seat.getId());
-        }
+        // 批量校验能否删除
+        assertBatchCanChange(new HashSet<>(seatIds));
 
         // 删库存
         showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
@@ -286,16 +321,16 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
         log.info("批量删除物理座位, hallId: {}, count: {}", hallId, seatIds.size());
     }
 
-    @Override
-    public void deleteSeat(Long hallId, Long seatId) {
-        requireHall(hallId);
-        Seat seat = getSeat(hallId, seatId);
-        assertSeatCanChange(seatId);
-        showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
-                .eq(ShowtimeSeat::getSeatId, seatId));
-        seatMapper.deleteById(seat.getId());
-        log.info("物理座位删除成功, hallId: {}, seatId: {}", hallId, seatId);
-    }
+//    @Override
+//    public void deleteSeat(Long hallId, Long seatId) {
+//        requireHall(hallId);
+//        Seat seat = getSeat(hallId, seatId);
+//        assertSeatCanChange(seatId);
+//        showtimeSeatMapper.delete(new LambdaQueryWrapper<ShowtimeSeat>()
+//                .eq(ShowtimeSeat::getSeatId, seatId));
+//        seatMapper.deleteById(seat.getId());
+//        log.info("物理座位删除成功, hallId: {}, seatId: {}", hallId, seatId);
+//    }
 
     @Override
     @Transactional

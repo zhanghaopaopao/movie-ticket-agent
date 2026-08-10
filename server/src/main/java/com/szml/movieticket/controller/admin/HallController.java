@@ -138,11 +138,11 @@ public class HallController {
     /**
      * 批量保存影厅物理座位布局。
      */
-    @PutMapping("/api/admin/halls/{hallId}/seats/layout")
-    public Result<HallSeatVO> saveSeatLayout(@PathVariable Long hallId,
-                                             @Valid @RequestBody SeatLayoutSaveDTO dto) {
-        log.info("批量保存座位布局, hallId: {}, seatCount: {}", hallId,
-                dto.getSeats() == null ? 0 : dto.getSeats().size());
-        return Result.success(hallService.saveSeatLayout(hallId, dto));
-    }
+//    @PutMapping("/api/admin/halls/{hallId}/seats/layout")
+//    public Result<HallSeatVO> saveSeatLayout(@PathVariable Long hallId,
+//                                             @Valid @RequestBody SeatLayoutSaveDTO dto) {
+//        log.info("批量保存座位布局, hallId: {}, seatCount: {}", hallId,
+//                dto.getSeats() == null ? 0 : dto.getSeats().size());
+//        return Result.success(hallService.saveSeatLayout(hallId, dto));
+//    }
 }
