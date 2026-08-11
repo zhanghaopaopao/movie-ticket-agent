@@ -126,34 +126,34 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             throw new ShowtimeException(ErrorCode.MOVIE_NOT_FOUND);
         }
         if (movie.getStatus() == MovieStatus.OFFLINE) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_MOVIE_OFFLINE);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_MOVIE_OFFLINE);//已经下架的影片不能够排场次
         }
 
         Hall hall = hallMapper.selectById(dto.getHallId());
         if (hall == null) {
-            throw new ShowtimeException(ErrorCode.HALL_NOT_FOUND);
+            throw new ShowtimeException(ErrorCode.HALL_NOT_FOUND);//查询影厅是否存在
         }
         if (hall.getStatus() == HallStatus.INACTIVE) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_INACTIVE);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_INACTIVE);//停用的影厅不能够排场次
         }
         if (seatMapper.selectCount(new LambdaQueryWrapper<Seat>().eq(Seat::getHallId, dto.getHallId())) == 0) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_NO_SEATS);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HALL_NO_SEATS);//没有设置座位的影厅不能够设置查场次
         }
 
         Cinema cinema = cinemaMapper.selectById(hall.getCinemaId());
         if (cinema != null && cinema.getStatus() == CinemaStatus.INACTIVE) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_CINEMA_INACTIVE);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_CINEMA_INACTIVE);//已经停用的影院不能够新增场次
         }
 
         // 场次时间不能早于影片上映日期
         if (movie.getReleaseDate() != null && dto.getStartAt().toLocalDate().isBefore(movie.getReleaseDate())) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);//场次的时间不能够早于影片的上映日期
         }
 
         // 只允许创建明天及之后的场次
         LocalDateTime tomorrow = LocalDate.now().plusDays(1).atStartOfDay();
         if (dto.getStartAt().isBefore(tomorrow)) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);//不允许创建之前的场次
         }
 
         // 计算散场时间
@@ -161,7 +161,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         LocalDateTime endAt = startAt.plusMinutes(movie.getDuration() + CLEANING_MINUTES);//加上10分钟
 
         // 时间冲突校验：同一影厅，新场次不能与已有场次重叠且间隔 ≥ 20min
-        checkTimeConflict(dto.getHallId(), null, startAt, endAt);
+        checkTimeConflict(dto.getHallId(), null, startAt, endAt);//校验同一影厅下场次的时间冲突问题
 
         Showtime showtime = new Showtime();
         BeanUtils.copyProperties(dto, showtime);
@@ -170,7 +170,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
         showtime.setStatus(ShowtimeStatus.ON_SALE);
         save(showtime);
 
-        initializeShowtimeSeats(showtime);
+        initializeShowtimeSeats(showtime);//进行初始化场次的座位库存
         log.info("场次新增成功, id: {}, movieId: {}, hallId: {}, startAt: {}", showtime.getId(), dto.getMovieId(), dto.getHallId(), startAt);
     }
 
@@ -178,7 +178,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
     public void updateShowtime(Long id, ShowtimeUpdateDTO dto) {
         Showtime showtime = getById(id);
         if (showtime == null) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_NOT_FOUND);//校验场次是否存在
         }
 
         List<String> updatedFields = new ArrayList<>();
@@ -196,17 +196,17 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
             // 只允许改为明天及之后的场次
             LocalDateTime tomorrow = LocalDate.now().plusDays(1).atStartOfDay();
             if (dto.getStartAt().isBefore(tomorrow)) {
-                throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);
+                throw new ShowtimeException(ErrorCode.SHOWTIME_START_AT_TOO_EARLY);//不可以修改日期为之前的日期
             }
 
             // 重新计算 endAt
             Movie movie = movieMapper.selectById(showtime.getMovieId());
             if (movie != null && movie.getReleaseDate() != null
                     && dto.getStartAt().toLocalDate().isBefore(movie.getReleaseDate())) {
-                throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);
+                throw new ShowtimeException(ErrorCode.SHOWTIME_BEFORE_RELEASE_DATE);//修改日期不允许早于该影片的上映日期
             }
             LocalDateTime endAt = dto.getStartAt().plusMinutes(movie != null ? movie.getDuration() + CLEANING_MINUTES : 0);
-            checkTimeConflict(showtime.getHallId(), id, dto.getStartAt(), endAt);
+            checkTimeConflict(showtime.getHallId(), id, dto.getStartAt(), endAt);//修改日期校验冲突问题
             showtime.setStartAt(dto.getStartAt());
             showtime.setEndAt(endAt);
             updatedFields.add("startAt");
@@ -244,7 +244,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
                         .eq(ShowtimeSeat::getShowtimeId, id)
                         .eq(ShowtimeSeat::getStatus, INVENTORY_LOCKED));
         if (lockedCount > 0) {
-            throw new ShowtimeException(ErrorCode.SHOWTIME_HAS_LOCKED_SEATS);
+            throw new ShowtimeException(ErrorCode.SHOWTIME_HAS_LOCKED_SEATS);//该场次已经有锁座的状态不允许变更状态
         }
 
         showtime.setStatus(dto.getStatus());
@@ -574,7 +574,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
         LambdaQueryWrapper<Showtime> wrapper = new LambdaQueryWrapper<Showtime>()
                 .eq(Showtime::getHallId, hallId)
-                .ne(Showtime::getStatus, ShowtimeStatus.ENDED)
+                .ne(Showtime::getStatus, ShowtimeStatus.ENDED)//只筛选出没有结束的场次
                 .gt(Showtime::getEndAt, startAt)
                 .lt(Showtime::getStartAt, endAt);
         if (excludeShowtimeId != null) {
@@ -694,7 +694,7 @@ public class ShowtimeServiceImpl extends ServiceImpl<ShowtimeMapper, Showtime> i
 
     private void initializeShowtimeSeats(Showtime showtime) {
         List<Seat> physicalSeats = seatMapper.selectList(new LambdaQueryWrapper<Seat>()
-                .eq(Seat::getHallId, showtime.getHallId()));
+                .eq(Seat::getHallId, showtime.getHallId()));//查出物理座位实体
         if (physicalSeats.isEmpty()) {
             return;
         }

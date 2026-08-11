@@ -61,7 +61,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
     @Override
     public MoviePageVO pageMovies(int page, int size, String keyword, String status) {
         LambdaQueryWrapper<Movie> wrapper = buildQueryWrapper(keyword, status);
-        wrapper.orderByDesc(Movie::getReleaseDate);
+        wrapper.orderByDesc(Movie::getReleaseDate);//根据上映日期降序排序
 
         Page<Movie> pageResult = page(new Page<>(page, size), wrapper);
         List<MovieVO> records = buildMovieVOList(pageResult.getRecords());
@@ -85,7 +85,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
 
     @Override
     public void createMovie(MovieCreateDTO dto) {
-        long count = count(new LambdaQueryWrapper<Movie>().eq(Movie::getName, dto.getName()));
+        long count = count(new LambdaQueryWrapper<Movie>().eq(Movie::getName, dto.getName()));//判断影片名称是否重复
         if (count > 0) {
             throw new MovieException(ErrorCode.MOVIE_NAME_DUPLICATE);
         }
@@ -119,7 +119,9 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         if (StringUtils.hasText(dto.getGenre())) { movie.setGenre(dto.getGenre()); updatedFields.add("genre"); }
         if (dto.getDuration() != null && !dto.getDuration().equals(movie.getDuration())) {
             long showtimeCount = showtimeMapper.selectCount(
-                    new LambdaQueryWrapper<Showtime>().eq(Showtime::getMovieId, id));
+                    new LambdaQueryWrapper<Showtime>()
+                            .eq(Showtime::getMovieId, id)
+                            .ne(Showtime::getStatus, ShowtimeStatus.ENDED));//排除结束的场次
             if (showtimeCount > 0) {
                 throw new MovieException(ErrorCode.MOVIE_DURATION_IMMUTABLE);
             }
@@ -135,6 +137,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             List<Showtime> showtimes = showtimeMapper.selectList(
                     new LambdaQueryWrapper<Showtime>()
                             .eq(Showtime::getMovieId, id)
+                            .ne(Showtime::getStatus, ShowtimeStatus.ENDED)//排除结束的场次
                             .orderByAsc(Showtime::getStartAt));
             if (!showtimes.isEmpty()) {
                 LocalDate earliestShowtimeDate = showtimes.getFirst().getStartAt().toLocalDate();
@@ -146,12 +149,12 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             updatedFields.add("releaseDate");
         }
         if (dto.getStatus() != null) {
-            // 下架保护：只要有在售场次就不允许下架
+            // 下架保护：有未结束场次就不允许下架
             if (dto.getStatus() == MovieStatus.OFFLINE) {
                 long activeCount = showtimeMapper.selectCount(
                         new LambdaQueryWrapper<Showtime>()
                                 .eq(Showtime::getMovieId, id)
-                                .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                                .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
                 if (activeCount > 0) {
                     throw new MovieException(ErrorCode.MOVIE_HAS_ACTIVE_SHOWTIMES);
                 }
@@ -185,7 +188,7 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
             long activeCount = showtimeMapper.selectCount(
                     new LambdaQueryWrapper<Showtime>()
                             .eq(Showtime::getMovieId, id)
-                            .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
+                            .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
             if (activeCount > 0) {
                 throw new MovieException(ErrorCode.MOVIE_HAS_ACTIVE_SHOWTIMES);
             }
@@ -211,9 +214,11 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         }
 
         long showtimeCount = showtimeMapper.selectCount(
-                new LambdaQueryWrapper<Showtime>().eq(Showtime::getMovieId, id));
+                new LambdaQueryWrapper<Showtime>()
+                        .eq(Showtime::getMovieId, id)
+                        .ne(Showtime::getStatus, ShowtimeStatus.ENDED));
         if (showtimeCount > 0) {
-            throw new MovieException(ErrorCode.MOVIE_HAS_ASSOCIATED_SHOWTIMES);
+            throw new MovieException(ErrorCode.MOVIE_HAS_ASSOCIATED_SHOWTIMES);//只要有除了结束的场次,都不允许删除
         }
 
         removeById(id);
@@ -476,13 +481,14 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
                         .eq(Showtime::getMovieId, movie.getId())
                         .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
         vo.setShowtimeCount(activeShowtimes.size());
+//不需要查询覆盖影院数
 
-        Set<Long> cinemaIds = new HashSet<>();
-        for (Showtime st : activeShowtimes) {
-            Hall hall = hallMapper.selectById(st.getHallId());
-            if (hall != null) cinemaIds.add(hall.getCinemaId());
-        }
-        vo.setCinemaCount(cinemaIds.size());
+//        Set<Long> cinemaIds = new HashSet<>();
+//        for (Showtime st : activeShowtimes) {
+//            Hall hall = hallMapper.selectById(st.getHallId());
+//            if (hall != null) cinemaIds.add(hall.getCinemaId());
+//        }
+        vo.setCinemaCount(0);
         return vo;
     }
 
@@ -497,17 +503,17 @@ public class MovieServiceImpl extends ServiceImpl<MovieMapper, Movie> implements
         switch (status) {
             case NOW_SHOWING:
                 if (releaseDate.isAfter(today)) {
-                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_PAST);
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_PAST);//热映规则
                 }
                 break;
             case COMING_SOON:
                 if (!releaseDate.isAfter(today)) {
-                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_FUTURE);
+                    throw new MovieException(ErrorCode.MOVIE_RELEASE_DATE_FUTURE);//待上映规则
                 }
                 break;
             case OFFLINE:
                 if (isCreate) {
-                    throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);
+                    throw new MovieException(ErrorCode.MOVIE_STATUS_INVALID);//新增影片不能够选择下架状态
                 }
                 break;
         }

@@ -74,7 +74,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
     public void createCinema(CinemaCreateDTO dto) {
         long count = count(new LambdaQueryWrapper<Cinema>().eq(Cinema::getName, dto.getName()));
         if (count > 0) {
-            throw new CinemaException(ErrorCode.CINEMA_NAME_DUPLICATE);
+            throw new CinemaException(ErrorCode.CINEMA_NAME_DUPLICATE);//不能够设置同名的影院
         }
 
         Cinema cinema = new Cinema();
@@ -82,7 +82,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
         if (dto.getServices() != null) {
             cinema.setServices(JSONUtil.toJsonStr(dto.getServices()));
         }
-        cinema.setStatus(CinemaStatus.ACTIVE);
+        cinema.setStatus(CinemaStatus.ACTIVE);//新增影院默认是启用
         save(cinema);
 
         log.info("影院新增成功, id: {}, name: {}", cinema.getId(), cinema.getName());
@@ -132,7 +132,7 @@ public class CinemaServiceImpl extends ServiceImpl<CinemaMapper, Cinema> impleme
                                 .in(Showtime::getHallId, hallIds)
                                 .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
                 if (activeCount > 0) {
-                    throw new CinemaException(ErrorCode.CINEMA_HAS_ACTIVE_SHOWTIMES);
+                    throw new CinemaException(ErrorCode.CINEMA_HAS_ACTIVE_SHOWTIMES);//存在在售场次的影院不能够停用
                 }
             }
         }

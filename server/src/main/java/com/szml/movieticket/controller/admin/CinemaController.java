@@ -44,7 +44,7 @@ public class CinemaController {
     }
 
     /**
-     * 查询未停用影院及未停用影厅选项（id + name），供下拉联动使用。
+     * 查询未停用影院及未停用影厅选项（id + name），供下拉联动使用。(座位库存,查询没有下架的影院以及未下架影院中的未停用的影厅)
      */
     @GetMapping("/options")
     public Result<List<CinemaOptionVO>> options() {

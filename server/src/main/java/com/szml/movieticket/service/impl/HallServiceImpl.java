@@ -91,7 +91,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
 
         Hall hall = new Hall();
         BeanUtils.copyProperties(dto, hall);
-        hall.setStatus(HallStatus.ACTIVE);
+        hall.setStatus(HallStatus.ACTIVE);//新增影厅
         save(hall);
 
         log.info("影厅新增成功, id: {}, name: {}, cinemaId: {}", hall.getId(), hall.getName(), hall.getCinemaId());
@@ -138,7 +138,7 @@ public class HallServiceImpl extends ServiceImpl<HallMapper, Hall> implements Ha
                             .eq(Showtime::getHallId, id)
                             .eq(Showtime::getStatus, ShowtimeStatus.ON_SALE));
             if (activeCount > 0) {
-                throw new HallException(ErrorCode.HALL_HAS_ACTIVE_SHOWTIMES);
+                throw new HallException(ErrorCode.HALL_HAS_ACTIVE_SHOWTIMES);//如果有在售的场次不允许停用影厅
             }
         }
 

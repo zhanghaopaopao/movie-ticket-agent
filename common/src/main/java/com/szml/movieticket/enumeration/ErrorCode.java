@@ -43,7 +43,7 @@ public enum ErrorCode {
 
     MOVIE_NOT_FOUND(2000, "影片不存在"),
     MOVIE_NAME_DUPLICATE(2001, "影片名称已存在"),
-    MOVIE_HAS_ACTIVE_SHOWTIMES(2002, "该影片存在在售场次，不可下架"),
+    MOVIE_HAS_ACTIVE_SHOWTIMES(2002, "该影片存在未结束的场次，不可下架"),
     MOVIE_DURATION_IMMUTABLE(2003, "该影片已关联场次，不可修改时长"),
     MOVIE_STATUS_INVALID(2005, "新增影片不能选择已下架状态"),
     MOVIE_RELEASE_DATE_PAST(2006, "热映中的影片上映日期不能晚于今天"),
