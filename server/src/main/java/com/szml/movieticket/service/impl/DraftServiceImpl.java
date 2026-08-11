@@ -47,9 +47,7 @@ public class DraftServiceImpl extends ServiceImpl<PurchaseDraftMapper, PurchaseD
     public DraftVO getCurrentDraft(Long userId) {
         PurchaseDraft draft = getOne(new LambdaQueryWrapper<PurchaseDraft>()
                 .eq(PurchaseDraft::getUserId, userId)
-                .in(PurchaseDraft::getStatus, "ACTIVE", "FROZEN")
-                .orderByDesc(PurchaseDraft::getUpdateTime)
-                .last("LIMIT 1"));
+                .eq(PurchaseDraft::getStatus, "ACTIVE"));
         if (draft == null) {
             return null;
         }
